@@ -133,3 +133,9 @@ CSRF_TRUSTED_ORIGINS = list(set([
 
 # Make sure localhost is allowed
 ALLOWED_HOSTS = list(set(list(ALLOWED_HOSTS) + ["127.0.0.1", "localhost"]))
+
+# Load local overrides if present
+try:
+    from .settings_local import *
+except Exception:
+    pass
