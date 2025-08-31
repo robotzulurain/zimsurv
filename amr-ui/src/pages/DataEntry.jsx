@@ -1,104 +1,259 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { apiFetch } from '../api'
 
-/**
- * SmartInput
- * - strict=true  -> <select>
- * - strict=false -> <input list=...> with <datalist> suggestions (user can also type anything)
- */
-function SmartInput({ label, value, onChange, options=[], placeholder='', strict=true, name, type='text' }) {
-  const id = `dl-${name}`
+const OPTIONS = {
+  sex: ['M','F','U'],
+  ast: ['S','I','R'],
+  host: ['human','animal','environment'],
+  specimen: ['urine','blood','stool','sputum','wound'],
+  organism: ['E. coli','K. pneumoniae','S. aureus','P. aeruginosa','Salmonella spp.'],
+  antibiotic: ['Ciprofloxacin','Ceftriaxone','Amoxicillin','Gentamicin','Meropenem'],
+}
+
+function ToggleField({ label, name, value, onChange, options=[], type='text' }) {
+  const [useDropdown, setUseDropdown] = useState(true)
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:220}}>
-      <span className="small" style={{fontWeight:700}}>{label}</span>
-      {strict ? (
-        <select value={value} onChange={e=>onChange(e.target.value)}>
-          <option value="">{placeholder || `Select ${label}`}</option>
-          {options.map(opt=> <option key={opt} value={opt}>{opt}</option>)}
+    <div className="field">
+      <label className="lbl">
+        {label}
+        <button type="button" className="mini" onClick={()=>setUseDropdown(x=>!x)}>
+          {useDropdown ? 'Type' : 'Pick'}
+        </button>
+      </label>
+      {useDropdown && options.length>0 ? (
+        <select value={value||''} onChange={e=>onChange(name, e.target.value)}>
+          <option value="">— select —</option>
+          {options.map(o=><option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
-        <>
-          <input
-            type={type}
-            list={type==='date' ? undefined : id}
-            value={value}
-            placeholder={placeholder || `Type or pick ${label}`}
-            onChange={e=>onChange(e.target.value)}
-            style={{padding:'8px 10px', border:'1px solid #cbd5e1', borderRadius:8}}
-          />
-          {type!=='date' && (
-            <datalist id={id}>
-              {options.map(opt=> <option key={opt} value={opt} />)}
-            </datalist>
-          )}
-        </>
+        <input type={type} value={value||''} onChange={e=>onChange(name, e.target.value)} />
       )}
     </div>
   )
 }
 
 export default function DataEntry(){
-  const [data,setData]=useState(null)
-  useEffect(()=>{ apiFetch('/api/lab-results/?limit=200').then(setData).catch(console.error)},[])
-  const rows = data?.results || []
-
-  const uniq = (arr)=> Array.from(new Set(arr.filter(Boolean).map(s=>String(s).trim()))).sort()
-
-  // Suggestion lists from existing data
-  const patientIds = useMemo(()=> uniq(rows.map(r=>r.patient_id)), [rows])
-  const facilities = useMemo(()=> uniq(rows.map(r=>r.facility)), [rows])
-  const organisms  = useMemo(()=> uniq(rows.map(r=>r.organism)), [rows])
-  const antibiotics= useMemo(()=> uniq(rows.map(r=>r.antibiotic)), [rows])
-  const specimens  = useMemo(()=> uniq(rows.map(r=>r.specimen)), [rows])
-
-  // UI mode toggle
-  const [strict, setStrict] = useState(false) // false = typing + suggestions
-
-  const [form,setForm] = useState({
-    host:'Human', facility:'', patient_id:'', sex:'', age_band:'',
-    specimen:'', organism:'', antibiotic:'', ast:'', date:''
+  const [form, setForm] = useState({
+    date: new Date().toISOString().slice(0,10),
+    patient_id: '',
+    sex: '',
+    age: '',
+    specimen: '',
+    organism: '',
+    antibiotic: '',
+    ast: '',
+    host: 'human',
+    facility: '',
   })
-  const update = (k,v)=> setForm(f=>({...f,[k]:v}))
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState(null)
 
-  const ageBands = ['0-4','5-14','15-24','25-44','45-64','65+']
+  const requiredLabels = useMemo(()=>({
+    patient_id: 'Patient ID',
+    specimen: 'Specimen',
+    organism: 'Organism',
+    antibiotic: 'Antibiotic',
+    ast: 'AST',
+    date: 'Date',
+  }),[])
+  const missing = useMemo(()=> Object.entries(requiredLabels)
+    .filter(([k]) => !String(form[k]||'').trim())
+    .map(([,label])=>label)
+  ,[form,requiredLabels])
+
+  function setField(k,v){ setForm(f=>({...f,[k]:v})) }
+
+  async function handleSubmit(e){
+    e.preventDefault()
+    setNote(null)
+    setBusy(true) // Submit ENABLED by default, only disabled while sending
+    try{
+      const payload = { ...form, age: form.age===''? null : Number(form.age) }
+      const r = await apiFetch('/api/data-entry/', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload)
+      })
+      setNote({ ok:true, msg:'Saved ✓', detail:r })
+      setForm(f=>({ ...f, organism:'', antibiotic:'', ast:'' })) // quick next entry
+    }catch(err){
+      const msg = String(err)
+      const hint = /404|405/.test(msg)
+        ? 'Backend route missing. Add POST /api/data-entry/ (and /bulk) to your API.'
+        : ''
+      setNote({ ok:false, msg:`Submit failed: ${msg}`, hint })
+    }finally{
+      setBusy(false)
+    }
+  }
+
+  // CSV upload
+  const [csvRows, setCsvRows] = useState([])
+  const [csvErr, setCsvErr] = useState(null)
+  const [csvBusy, setCsvBusy] = useState(false)
+  const [csvNote, setCsvNote] = useState(null)
+
+  function parseCSVText(text){
+    // Simple CSV (no quoted commas). Expected headers (any order):
+    // patient_id, sex, age, specimen, organism, antibiotic, ast, date, host, facility
+    const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0)
+    if (!lines.length) return []
+    const header = lines[0].split(',').map(h=>h.trim().toLowerCase())
+    const idx = (name) => header.indexOf(name)
+    const rows = []
+    for (let i=1;i<lines.length;i++){
+      const cols = lines[i].split(',').map(c=>c.trim())
+      if(cols.every(c=>!c)) continue
+      rows.push({
+        patient_id: cols[idx('patient_id')] || '',
+        sex: cols[idx('sex')] || '',
+        age: cols[idx('age')] || '',
+        specimen: cols[idx('specimen')] || '',
+        organism: cols[idx('organism')] || '',
+        antibiotic: cols[idx('antibiotic')] || '',
+        ast: cols[idx('ast')] || '',
+        date: cols[idx('date')] || '',
+        host: cols[idx('host')] || '',
+        facility: cols[idx('facility')] || '',
+      })
+    }
+    return rows
+  }
+
+  function handleCSVFile(file){
+    setCsvErr(null); setCsvRows([]); setCsvNote(null)
+    const reader = new FileReader()
+    reader.onload = (e)=>{
+      try{
+        const rows = parseCSVText(String(e.target.result||''))
+        if(!rows.length) throw new Error('No data rows found')
+        setCsvRows(rows)
+      }catch(err){ setCsvErr(String(err)) }
+    }
+    reader.onerror = ()=> setCsvErr('Failed to read file')
+    reader.readAsText(file)
+  }
+
+  async function uploadCSV(){
+    setCsvBusy(true); setCsvNote(null)
+    try{
+      const r = await apiFetch('/api/data-entry/bulk/', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ rows: csvRows })
+      })
+      setCsvNote({ ok:true, msg:`Uploaded ${csvRows.length} rows ✓`, detail:r })
+      setCsvRows([])
+    }catch(err){
+      const msg = String(err)
+      const hint = /404|405/.test(msg)
+        ? 'Bulk route missing. Add POST /api/data-entry/bulk/ that accepts {rows:[...]}.'
+        : ''
+      setCsvNote({ ok:false, msg:`Upload failed: ${msg}`, hint })
+    }finally{
+      setCsvBusy(false)
+    }
+  }
 
   return (
     <section className="card">
-      <h2 className="section-title">Manual Entry</h2>
-      <div className="small">
-        Mode:&nbsp;
-        <button className={`subtab ${strict ? 'active':''}`} onClick={()=>setStrict(true)}>Strict dropdowns</button>
-        <button className={`subtab ${!strict ? 'active':''}`} onClick={()=>setStrict(false)} style={{marginLeft:6}}>Type + suggestions</button>
-      </div>
+      <h2 className="section-title">Data Entry</h2>
 
-      <div className="grid grid-2" style={{marginTop:12}}>
-        <div className="selects" style={{alignItems:'flex-start'}}>
-          <SmartInput label="Host" name="host" value={form.host} onChange={v=>update('host',v)} options={['Human','Animal','Environment']} strict={true}/>
-          <SmartInput label="Facility" name="facility" value={form.facility} onChange={v=>update('facility',v)} options={facilities} strict={strict}/>
-          <SmartInput label="Patient ID" name="patient_id" value={form.patient_id} onChange={v=>update('patient_id',v)} options={patientIds} strict={strict}/>
-          <SmartInput label="Sex" name="sex" value={form.sex} onChange={v=>update('sex',v)} options={['F','M','U']} strict={true}/>
-          <SmartInput label="Age band" name="age_band" value={form.age_band} onChange={v=>update('age_band',v)} options={ageBands} strict={true}/>
+      <form onSubmit={handleSubmit} className="grid grid-2" style={{alignItems:'start'}}>
+        <div className="card" style={{display:'grid', gap:10}}>
+          <h3 className="section-title" style={{marginTop:0}}>Single record</h3>
+
+          <div className="field">
+            <label className="lbl">Date</label>
+            <input type="date" value={form.date||''} onChange={e=>setField('date', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label className="lbl">Patient ID</label>
+            <input type="text" value={form.patient_id||''} onChange={e=>setField('patient_id', e.target.value)} />
+          </div>
+
+          <ToggleField label="Sex" name="sex" value={form.sex} onChange={setField} options={OPTIONS.sex} />
+          <div className="field">
+            <label className="lbl">Age (years)</label>
+            <input type="number" min="0" step="1" value={form.age||''} onChange={e=>setField('age', e.target.value)} />
+          </div>
+
+          <ToggleField label="Specimen" name="specimen" value={form.specimen} onChange={setField} options={OPTIONS.specimen} />
+          <ToggleField label="Organism" name="organism" value={form.organism} onChange={setField} options={OPTIONS.organism} />
+          <ToggleField label="Antibiotic" name="antibiotic" value={form.antibiotic} onChange={setField} options={OPTIONS.antibiotic} />
+          <ToggleField label="AST (S/I/R)" name="ast" value={form.ast} onChange={setField} options={OPTIONS.ast} />
+
+          <ToggleField label="Host" name="host" value={form.host} onChange={setField} options={OPTIONS.host} />
+          <div className="field">
+            <label className="lbl">Facility</label>
+            <input type="text" value={form.facility||''} onChange={e=>setField('facility', e.target.value)} />
+          </div>
+
+          {missing.length>0 && (
+            <div className="small" style={{color:'#b45309'}}>
+              Missing: {missing.join(', ')}
+            </div>
+          )}
+
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <button type="submit" className="btn" disabled={busy}>
+              {busy? 'Submitting…':'Submit'}
+            </button>
+            {note && (
+              <span className="small" style={{color: note.ok? '#047857' : '#b91c1c'}}>
+                {note.msg}{note.hint? ` — ${note.hint}`:''}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="selects" style={{alignItems:'flex-start'}}>
-          <SmartInput label="Specimen" name="specimen" value={form.specimen} onChange={v=>update('specimen',v)} options={specimens} strict={strict}/>
-          <SmartInput label="Organism" name="organism" value={form.organism} onChange={v=>update('organism',v)} options={organisms} strict={strict}/>
-          <SmartInput label="Antibiotic" name="antibiotic" value={form.antibiotic} onChange={v=>update('antibiotic',v)} options={antibiotics} strict={strict}/>
-          <SmartInput label="AST" name="ast" value={form.ast} onChange={v=>update('ast',v)} options={['S','I','R']} strict={true}/>
-          <SmartInput label="Test date" name="date" type="date" value={form.date} onChange={v=>update('date',v)} options={[]} strict={false}/>
+        <div className="card" style={{display:'grid', gap:10}}>
+          <h3 className="section-title" style={{marginTop:0}}>CSV upload</h3>
+          <p className="small">
+            Expected headers (any order):
+            <code> patient_id, sex, age, specimen, organism, antibiotic, ast, date, host, facility </code>
+          </p>
+          <input type="file" accept=".csv,text/csv" onChange={e=> e.target.files?.[0] && handleCSVFile(e.target.files[0])} />
+          {csvErr && <div className="small" style={{color:'#b91c1c'}}>CSV error: {csvErr}</div>}
+
+          {csvRows.length>0 && (
+            <>
+              <div className="small">{csvRows.length} rows parsed. Preview first 5:</div>
+              <div style={{overflowX:'auto', maxHeight:200, border:'1px solid #e5e7eb', borderRadius:8}}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Date</th><th>Patient</th><th>Sex</th><th>Age</th>
+                      <th>Specimen</th><th>Organism</th><th>Antibiotic</th><th>AST</th>
+                      <th>Host</th><th>Facility</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvRows.slice(0,5).map((r,i)=>(
+                      <tr key={i}>
+                        <td>{r.date}</td><td>{r.patient_id}</td><td>{r.sex}</td><td>{r.age}</td>
+                        <td>{r.specimen}</td><td>{r.organism}</td><td>{r.antibiotic}</td><td>{r.ast}</td>
+                        <td>{r.host}</td><td>{r.facility}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                <button type="button" className="btn" onClick={uploadCSV} disabled={csvBusy}>
+                  {csvBusy? 'Uploading…' : `Upload CSV (${csvRows.length})`}
+                </button>
+                {csvNote && (
+                  <span className="small" style={{color: csvNote.ok? '#047857' : '#b91c1c'}}>
+                    {csvNote.msg}{csvNote.hint? ` — ${csvNote.hint}`:''}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      </div>
-
-      <div style={{marginTop:12,display:'flex',alignItems:'center',gap:12}}>
-        <button className="subtab" title="Demo only" disabled>Submit (disabled)</button>
-        <span className="small">Demo UI only — backend POST wiring later.</span>
-        <span className="badge">Mode: {strict ? 'Strict dropdowns' : 'Type + suggestions'}</span>
-      </div>
-
-      <details style={{marginTop:12}}>
-        <summary className="small">Preview payload</summary>
-        <pre>{JSON.stringify(form,null,2)}</pre>
-      </details>
+      </form>
     </section>
   )
 }
