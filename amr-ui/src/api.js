@@ -1,6 +1,15 @@
 const BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/,'') || '';
 const TOKEN = import.meta.env.VITE_API_TOKEN;
 
+function extractArray(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return null;
+  for (const k of ['results','data','trend','rows','items']) {
+    if (Array.isArray(payload[k])) return payload[k];
+  }
+  return null;
+}
+
 async function fetchJSON(path, opts={}) {
   const r = await fetch(`${BASE}${path}`, {
     headers: {
@@ -12,10 +21,8 @@ async function fetchJSON(path, opts={}) {
   });
   if (!r.ok) throw new Error(`HTTP ${r.status} - ${await r.text()}`);
   const data = await r.json();
-  // Normalize: return arrays as-is; return .results if present; else raw object
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.results)) return data.results;
-  return data;
+  const arr = extractArray(data);
+  return arr ?? data; // return array if we found one, otherwise raw object
 }
 
 export const api = {
