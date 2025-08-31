@@ -1,21 +1,26 @@
 import React, { useEffect, useState } from 'react'
-import { apiFetch, getApiDebug } from '../api'
-
 export default function Debug(){
-  const [counts,setCounts]=useState(null)
+  const [resp,setResp]=useState(null)
   const [err,setErr]=useState(null)
-  const meta = getApiDebug()
+  const BASE = import.meta.env.VITE_API_BASE
+  const TOKEN = import.meta.env.VITE_API_TOKEN
   useEffect(()=>{
-    apiFetch('/api/summary/counts-summary/')
-      .then(setCounts)
-      .catch(e=> setErr(String(e)))
+    fetch(`${BASE}/api/summary/counts-summary/`, {
+      headers: {
+        'Accept':'application/json',
+        'Authorization': `Token ${TOKEN || ''}`
+      }
+    }).then(async r=>{
+      if(!r.ok) throw new Error(`HTTP ${r.status} - ${await r.text()}`)
+      return r.json()
+    }).then(setResp).catch(e=>setErr(String(e)))
   },[])
   return (
     <section className="card">
       <h2 className="section-title">Debug</h2>
-      <div className="small">BASE: {meta.BASE} • TOKEN set: {String(meta.hasTOKEN)}</div>
-      {err && <div className="small" style={{color:'#b91c1c'}}>Error: {err}</div>}
-      <pre>{JSON.stringify({counts}, null, 2)}</pre>
+      <div className="small">BASE: {BASE} • TOKEN set: {String(Boolean(TOKEN))}</div>
+      {err && <div className="small" style={{color:'#b91c1c'}}>Fetch error: {err}</div>}
+      <pre>{JSON.stringify(resp,null,2)}</pre>
     </section>
   )
 }
