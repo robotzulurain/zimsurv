@@ -2,23 +2,32 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api";
 
 export default function Resistance() {
-  const [series, setSeries] = useState([]);
+  const [rows, setRows] = useState([]);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
-    api.trend().then((d) => {
-      setSeries(Array.isArray(d?.series) ? d.series : []);
-    });
+    api.trend().then(setRows).catch(e=>setErr(String(e.message||e)));
   }, []);
 
-  const rows = Array.isArray(series) ? series : [];
   return (
-    <section className="card">
-      <h2 className="section-title">Resistance</h2>
-      {rows.length === 0 ? (
-        <div className="small">No trend data</div>
-      ) : (
-        <pre className="small">{JSON.stringify(rows.slice(0, 10), null, 2)}</pre>
-      )}
+    <section>
+      <h2 className="section-title">Resistance (monthly %R)</h2>
+      {err && <div className="error">{err}</div>}
+      <div className="card" style={{padding:12}}>
+        <table className="table small">
+          <thead><tr><th>Month</th><th>Total</th><th>Resistant</th><th>%R</th></tr></thead>
+          <tbody>
+            {rows.map(r=>(
+              <tr key={r.month}>
+                <td>{r.month}</td>
+                <td>{r.total}</td>
+                <td>{r.resistant}</td>
+                <td>{r.percent_R}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

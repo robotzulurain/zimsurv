@@ -1,76 +1,55 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 
-// WHO-ish simple bands
-const AGE_BANDS = [
-  [0, 4], [5, 14], [15, 24], [25, 34],
-  [35, 44], [45, 54], [55, 64], [65, 200]
+const BANDS = [
+  {label:'0-4',  min:0, max:4},
+  {label:'5-14', min:5, max:14},
+  {label:'15-24',min:15, max:24},
+  {label:'25-34',min:25, max:34},
+  {label:'35-44',min:35, max:44},
+  {label:'45-54',min:45, max:54},
+  {label:'55-64',min:55, max:64},
+  {label:'65+',  min:65, max:200}
 ];
 
-function bandLabel([a,b]) { return b >= 200 ? `${a}+` : `${a}-${b}`; }
-function bandOf(age) {
-  const n = Number(age);
-  if (!Number.isFinite(n) || n < 0) return null;
-  for (const rng of AGE_BANDS) { if (n >= rng[0] && n <= rng[1]) return bandLabel(rng); }
-  return null;
-}
+export default function SexAge(){
+  const [labs,setLabs] = useState([]);
+  const [err,setErr] = useState("");
 
-export default function SexAge() {
-  const [rows, setRows] = useState([]);
+  useEffect(()=>{ api.lab().then(d=>setLabs(d?.results||[])).catch(e=>setErr(String(e.message||e))); },[]);
 
-  useEffect(() => {
-    api.lab().then(d => setRows(Array.isArray(d?.results) ? d.results : []));
-  }, []);
-
-  const table = useMemo(() => {
-    const bands = AGE_BANDS.map(bandLabel);
-    const init = Object.fromEntries(bands.map(k => [k, { M: 0, F: 0, U: 0 }]));
-    const out = { ...init };
-
-    for (const r of (rows || [])) {
-      const sex = (r?.sex || "U").toUpperCase();
-      const sKey = sex === "M" ? "M" : (sex === "F" ? "F" : "U");
-      const age = r?.age;
-      const bl = bandOf(age);
-      if (!bl) continue;
-      out[bl][sKey] += 1;
+  const table = useMemo(()=>{
+    const init = BANDS.map(b=>({band:b.label, M:0, F:0, U:0, Total:0}));
+    const findBand = (age)=>{
+      const a = Number(age||0);
+      return BANDS.find(b=>a>=b.min && a<=(b.max ?? a))?.label || '0-4';
+    };
+    const rows = Object.fromEntries(init.map(r=>[r.band, r]));
+    for(const r of labs){
+      const band = findBand(r.age);
+      const sex = (r.sex||'U').toUpperCase().startsWith('M')?'M':(r.sex||'U').toUpperCase().startsWith('F')?'F':'U';
+      rows[band][sex] += 1;
+      rows[band].Total += 1;
     }
-    return out;
-  }, [rows]);
-
-  const bands = AGE_BANDS.map(bandLabel);
+    return BANDS.map(b=>rows[b.label]);
+  },[labs]);
 
   return (
-    <section className="card">
-      <h2 className="section-title">Sex &amp; Age</h2>
-      {rows.length === 0 ? (
-        <div className="small">No data</div>
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Age band</th><th>Male</th><th>Female</th><th>Unknown</th><th>Total</th>
+    <section>
+      <h2 className="section-title">Sex & Age</h2>
+      {err && <div className="error">{err}</div>}
+      <div className="card">
+        <table className="table small">
+          <thead><tr><th>Age band</th><th>Male</th><th>Female</th><th>Unknown</th><th>Total</th></tr></thead>
+          <tbody>
+            {table.map(r=>(
+              <tr key={r.band}>
+                <td>{r.band}</td><td>{r.M}</td><td>{r.F}</td><td>{r.U}</td><td>{r.Total}</td>
               </tr>
-            </thead>
-            <tbody>
-              {bands.map(b => {
-                const r = table[b] || { M:0, F:0, U:0 };
-                const total = r.M + r.F + r.U;
-                return (
-                  <tr key={b}>
-                    <td>{b}</td>
-                    <td>{r.M}</td>
-                    <td>{r.F}</td>
-                    <td>{r.U}</td>
-                    <td>{total}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

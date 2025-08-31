@@ -1,0 +1,10 @@
+:root { --card: #fff; --muted:#666; --line:#eee; }
+body { font-family: system-ui, Arial, sans-serif; margin: 0; background:#fafafa; color:#111;}
+.section-title { margin: 12px 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.small { font-size: 13px; color: var(--muted); }
+.table { width: 100%; border-collapse: collapse; }
+.table th,.table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+.error { color: #b00020; background: #ffe9ed; border:1px solid #ffc7d0; padding:8px 10px; border-radius:10px; margin:8px 0;}
+/* simple bar color (inherits from default) */
+.card div>div>div { background: #4185f4; }

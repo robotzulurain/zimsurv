@@ -1,70 +1,26 @@
-const BASE = import.meta.env.VITE_API_BASE ?? "";
-const TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
+const BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/,'') || '';
+const TOKEN = import.meta.env.VITE_API_TOKEN;
 
-async function safeJson(res) {
-  try { return await res.json(); } catch { return null; }
-}
-
-async function get(path, fallback) {
-  try {
-    const res = await fetch(`${BASE}${path}`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Token ${TOKEN}`,
-      },
-    });
-    if (!res.ok) return fallback;
-    const data = await safeJson(res);
-    return data ?? fallback;
-  } catch {
-    return fallback;
-  }
+async function fetchJSON(path, opts={}) {
+  const r = await fetch(`${BASE}${path}`, {
+    headers: {
+      'Accept': 'application/json',
+      ...(opts.body ? {'Content-Type':'application/json'} : {}),
+      ...(TOKEN ? {'Authorization': `Token ${TOKEN}`} : {})
+    },
+    ...opts
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status} - ${await r.text()}`);
+  return r.json();
 }
 
 export const api = {
-  counts: () =>
-    get("/api/summary/counts-summary/", {
-      total_results: 0,
-      unique_patients: 0,
-      organisms_count: 0,
-    }),
-
-  trend: () =>
-    get("/api/summary/resistance-time-trend/", { series: [] }),
-
-  antibiogram: () =>
-    get("/api/summary/antibiogram/", { rows: [] }),
-
-  quality: () =>
-    get("/api/summary/data-quality/", {
-      completeness: {},
-      duplicates: {},
-      recent_activity: {},
-    }),
-
-  geo: () =>
-    get("/api/summary/facilities-geo/", { features: [] }),
-
-  lab: () =>
-    get("/api/lab-results/", { results: [] }),
-
-  createOne: (payload) =>
-    fetch(`${BASE}/api/data-entry/`, {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    }),
-
-  createBulk: (rows) =>
-    fetch(`${BASE}/api/data-entry/bulk/`, {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ rows }),
-    }),
+  counts: () => fetchJSON('/api/summary/counts-summary/'),
+  trend:  () => fetchJSON('/api/summary/resistance-time-trend/'),
+  antibiogram: () => fetchJSON('/api/summary/antibiogram/'),
+  quality: () => fetchJSON('/api/summary/data-quality/'),
+  facilities: () => fetchJSON('/api/summary/facilities-geo/'),
+  lab:   () => fetchJSON('/api/lab-results/'),
+  submitOne: (row) => fetchJSON('/api/data-entry/', {method:'POST', body: JSON.stringify(row)}),
+  submitBulk: (rows) => fetchJSON('/api/data-entry/bulk/', {method:'POST', body: JSON.stringify({rows})}),
 };
