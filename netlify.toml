@@ -5,9 +5,11 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Optional (still good to set so fallback isn't needed)
   VITE_API_BASE = "https://amr-app.onrender.com"
   VITE_API_TOKEN = "feb91ba9962758d186f6d011ed93bee659998aa8"
 
+# React Router SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
