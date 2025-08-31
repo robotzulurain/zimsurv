@@ -1,6 +1,7 @@
-const BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/,'') || '';
+const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/,'');
 const TOKEN = import.meta.env.VITE_API_TOKEN;
 
+// Pull an array out of common wrapper keys, otherwise return null
 function extractArray(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return null;
@@ -10,28 +11,38 @@ function extractArray(payload) {
   return null;
 }
 
-async function fetchJSON(path, opts={}) {
-  const r = await fetch(`${BASE}${path}`, {
+async function fetchJSON(path, opts = {}) {
+  const url = `${BASE}${path}`;
+  const r = await fetch(url, {
     headers: {
       'Accept': 'application/json',
-      ...(opts.body ? {'Content-Type':'application/json'} : {}),
-      ...(TOKEN ? {'Authorization': `Token ${TOKEN}`} : {})
+      ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(TOKEN ? { 'Authorization': `Token ${TOKEN}` } : {}),
     },
-    ...opts
+    ...opts,
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status} - ${await r.text()}`);
+  if (!r.ok) {
+    const txt = await r.text().catch(()=>'');
+    throw new Error(`HTTP ${r.status} - ${txt || r.statusText}`);
+  }
   const data = await r.json();
   const arr = extractArray(data);
-  return arr ?? data; // return array if we found one, otherwise raw object
+  return arr ?? data;
 }
 
+// Backwards-compatible named export used by existing pages
+export async function apiFetch(path, opts) {
+  return fetchJSON(path, opts);
+}
+
+// Nice convenience wrapper if you want it
 export const api = {
-  counts:   () => fetchJSON('/api/summary/counts-summary/'),
-  trend:    () => fetchJSON('/api/summary/resistance-time-trend/'),
-  antibiogram: () => fetchJSON('/api/summary/antibiogram/'),
-  quality:  () => fetchJSON('/api/summary/data-quality/'),
-  facilities: () => fetchJSON('/api/summary/facilities-geo/'),
-  lab:      () => fetchJSON('/api/lab-results/'),
-  submitOne:  (row)  => fetchJSON('/api/data-entry/', {method:'POST', body: JSON.stringify(row)}),
-  submitBulk: (rows) => fetchJSON('/api/data-entry/bulk/', {method:'POST', body: JSON.stringify({rows})}),
+  counts:        () => fetchJSON('/api/summary/counts-summary/'),
+  trend:         () => fetchJSON('/api/summary/resistance-time-trend/'),
+  antibiogram:   () => fetchJSON('/api/summary/antibiogram/'),
+  quality:       () => fetchJSON('/api/summary/data-quality/'),
+  facilities:    () => fetchJSON('/api/summary/facilities-geo/'),
+  lab:           () => fetchJSON('/api/lab-results/'),
+  submitOne:     (row)  => fetchJSON('/api/data-entry/', { method:'POST', body: JSON.stringify(row) }),
+  submitBulk:    (rows) => fetchJSON('/api/data-entry/bulk/', { method:'POST', body: JSON.stringify({ rows }) }),
 };
