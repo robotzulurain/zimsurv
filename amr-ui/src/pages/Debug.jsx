@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react'
+import { apiFetch } from '../api'
+
 export default function Debug(){
   const [resp,setResp]=useState(null)
   const [err,setErr]=useState(null)
   const BASE = import.meta.env.VITE_API_BASE
   const TOKEN = import.meta.env.VITE_API_TOKEN
+
   useEffect(()=>{
-    fetch(`${BASE}/api/summary/counts-summary/`, {
-      headers: {
-        'Accept':'application/json',
-        'Authorization': `Token ${TOKEN || ''}`
-      }
-    }).then(async r=>{
-      if(!r.ok) throw new Error(`HTTP ${r.status} - ${await r.text()}`)
-      return r.json()
-    }).then(setResp).catch(e=>setErr(String(e)))
+    apiFetch('/api/summary/counts-summary/')
+      .then(setResp)
+      .catch(e=> setErr(String(e)))
   },[])
+
   return (
     <section className="card">
       <h2 className="section-title">Debug</h2>

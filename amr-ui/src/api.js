@@ -1,23 +1,70 @@
-const BASE = import.meta.env.VITE_API_BASE || 'https://amr-app.onrender.com';
-let TOKEN = (import.meta.env.VITE_API_TOKEN || '').trim();
+const BASE = import.meta.env.VITE_API_BASE ?? "";
+const TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
 
-// Fallback ONLY for public Netlify demo if env vars are missing
-if (!TOKEN && typeof window !== 'undefined' && window.location.hostname.endsWith('netlify.app')) {
-  TOKEN = 'feb91ba9962758d186f6d011ed93bee659998aa8';
-  // console.warn('Using Netlify demo token fallback');
+async function safeJson(res) {
+  try { return await res.json(); } catch { return null; }
 }
 
-function buildHeaders(extra = {}) {
-  const headers = new Headers({ Accept: 'application/json', ...extra });
-  if (TOKEN) headers.set('Authorization', `Token ${TOKEN}`);
-  return headers;
+async function get(path, fallback) {
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Token ${TOKEN}`,
+      },
+    });
+    if (!res.ok) return fallback;
+    const data = await safeJson(res);
+    return data ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
 
-export async function apiFetch(path, opts = {}) {
-  const url = path.startsWith('http') ? path : `${BASE}${path}`;
-  const headers = buildHeaders(opts.headers || {});
-  const resp = await fetch(url, { ...opts, mode: 'cors', credentials: 'omit', headers });
-  const text = await resp.text().catch(()=> '');
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} - ${text || resp.statusText}`);
-  try { return JSON.parse(text); } catch { return null; }
-}
+export const api = {
+  counts: () =>
+    get("/api/summary/counts-summary/", {
+      total_results: 0,
+      unique_patients: 0,
+      organisms_count: 0,
+    }),
+
+  trend: () =>
+    get("/api/summary/resistance-time-trend/", { series: [] }),
+
+  antibiogram: () =>
+    get("/api/summary/antibiogram/", { rows: [] }),
+
+  quality: () =>
+    get("/api/summary/data-quality/", {
+      completeness: {},
+      duplicates: {},
+      recent_activity: {},
+    }),
+
+  geo: () =>
+    get("/api/summary/facilities-geo/", { features: [] }),
+
+  lab: () =>
+    get("/api/lab-results/", { results: [] }),
+
+  createOne: (payload) =>
+    fetch(`${BASE}/api/data-entry/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }),
+
+  createBulk: (rows) =>
+    fetch(`${BASE}/api/data-entry/bulk/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ rows }),
+    }),
+};
