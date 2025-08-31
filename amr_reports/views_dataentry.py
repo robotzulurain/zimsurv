@@ -20,6 +20,7 @@ class DataEntryCreate(APIView):
             return Response(LabResultSerializer(obj).data, status=status.HTTP_201_CREATED)
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class DataEntryBulk(APIView):
     """
     POST /api/data-entry/bulk/
