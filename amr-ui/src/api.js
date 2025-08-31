@@ -1,10 +1,10 @@
-const BASE = import.meta.env.VITE_API_BASE || '';
+const BASE = import.meta.env.VITE_API_BASE || 'https://amr-app.onrender.com';
 let TOKEN = (import.meta.env.VITE_API_TOKEN || '').trim();
 
-// Fallback JUST for public Netlify demo if env is missing
+// Fallback ONLY for public Netlify demo if env vars are missing
 if (!TOKEN && typeof window !== 'undefined' && window.location.hostname.endsWith('netlify.app')) {
   TOKEN = 'feb91ba9962758d186f6d011ed93bee659998aa8';
-  // console.warn('Using demo token fallback for Netlify');
+  // console.warn('Using Netlify demo token fallback');
 }
 
 function buildHeaders(extra = {}) {
