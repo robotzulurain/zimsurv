@@ -10,7 +10,12 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # Allow hosts from env or default to Render + local
 _allowed = os.getenv("ALLOWED_HOSTS", ".onrender.com,localhost,127.0.0.1")
-ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'amr-app.onrender.com',
+    'stirring-alpaca-e31b52.netlify.app',
+]
 
 # Installed apps
 INSTALLED_APPS = [
@@ -99,8 +104,8 @@ REST_FRAMEWORK = {
     ],
 }
 CORS_ALLOWED_ORIGINS = [
+    'https://stirring-alpaca-e31b52.netlify.app',
     'http://localhost:5173',
-    'http://127.0.0.1:5173',
 ]
 
 CORS_ALLOW_HEADERS = ['authorization', 'content-type', 'accept', 'origin']
@@ -119,4 +124,8 @@ CORS_ALLOW_HEADERS = [
     "content-type",
     "accept",
     "origin",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://stirring-alpaca-e31b52.netlify.app',
 ]
