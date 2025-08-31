@@ -3,12 +3,23 @@ import { apiFetch } from '../api'
 
 export default function Home(){
   const [counts,setCounts]=useState(null)
-  useEffect(()=>{ apiFetch('/api/summary/counts-summary/').then(setCounts).catch(console.error) },[])
+  const [err,setErr]=useState(null)
+
+  useEffect(()=>{
+    apiFetch('/api/summary/counts-summary/')
+      .then(setCounts)
+      .catch(e=>{
+        console.error('Home counts error:', e)
+        setErr(String(e))
+      })
+  },[])
+
   return (
     <div className="grid">
       <section className="card">
         <h2 className="section-title">Quick snapshot</h2>
-        {!counts && <div className="small">Loading…</div>}
+        {!counts && !err && <div className="small">Loading…</div>}
+        {err && <div className="small" style={{color:'#b91c1c'}}>Error: {err}</div>}
         {counts && (
           <div className="grid grid-3">
             <div className="card kpi"><div className="t">Total records</div><div className="v">{counts.total_results}</div></div>
