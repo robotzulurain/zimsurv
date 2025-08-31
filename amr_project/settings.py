@@ -1,12 +1,18 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = '_bv*11&oq=^i95qdrvqu9=6q6an7xe&q=lt!vz0z(%@8^ti0-p'
-DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+SECRET_KEY = os.getenv("SECRET_KEY", "demo-secret")
 
+# DEBUG comes from env (default False on Render)
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
+# Allow hosts from env or default to Render + local
+_allowed = os.getenv("ALLOWED_HOSTS", ".onrender.com,localhost,127.0.0.1")
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
+
+# Installed apps
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -14,11 +20,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
     'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
-
     'amr_reports',
 ]
 
@@ -53,6 +57,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'amr_project.wsgi.application'
 
+# Database (SQLite by default, can be overridden with DATABASE_URL)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -60,82 +65,26 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = []
+# Password validation
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-MEDIA_ROOT = BASE_DIR / "uploads"
-MEDIA_URL = "/media/"
+# Trust proxy headers (needed on Render)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# REST Framework configuration
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ],
-}
-
+# CORS (for Netlify/React frontend)
 CORS_ALLOW_ALL_ORIGINS = True
-
-# Filtering support
-REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] = [
-    'django_filters.rest_framework.DjangoFilterBackend',
-    'rest_framework.filters.OrderingFilter',
-    'rest_framework.filters.SearchFilter',
-]
-# Allow all origins (for development only)
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
-    ]
-}
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
-
-# --- AMR APP: CORS/CSRF/hosts for React dev server ---
-try:
-    INSTALLED_APPS.index('corsheaders')
-except ValueError:
-    INSTALLED_APPS += ['corsheaders']
-
-# Ensure CorsMiddleware is near the top (right after SecurityMiddleware is ideal)
-if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
-    # put it at the top to be safe
-    MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
-
-CORS_ALLOWED_ORIGINS = list(set([
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]))
-
-CSRF_TRUSTED_ORIGINS = list(set([
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]))
-
-# Make sure localhost is allowed
-ALLOWED_HOSTS = list(set(list(ALLOWED_HOSTS) + ["127.0.0.1", "localhost"]))
-
-# Load local overrides if present
-try:
-    from .settings_local import *
-except Exception:
-    pass
