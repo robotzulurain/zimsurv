@@ -1,0 +1,27 @@
+.de-card {
+  background:#fff; border:1px solid #e5e7eb; border-radius:14px;
+  box-shadow:0 8px 20px rgba(2,6,23,.05); padding:16px; margin-bottom:16px;
+}
+.de-title { font-size:18px; font-weight:800; color:#0f172a; margin:0 0 12px; }
+.de-grid {
+  display:grid; gap:12px;
+  grid-template-columns: repeat(2, minmax(220px,1fr));
+}
+@media (max-width: 900px){ .de-grid { grid-template-columns: 1fr; } }
+.de-label { font-size:12px; font-weight:800; color:#334155; margin-bottom:6px; }
+.de-input, .de-select {
+  width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; color:#0f172a;
+}
+.de-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+.de-btn {
+  padding:10px 14px; border-radius:10px; font-weight:800; border:1px solid transparent; cursor:pointer;
+}
+.de-btn.primary { background:#2563eb; color:#fff; }
+.de-btn.ghost { background:#f8fafc; color:#0f172a; border-color:#e2e8f0; }
+.de-note { color:#475569; line-height:1.5; }
+.de-msg-ok { color:#166534; font-weight:800; }
+.de-msg-err { color:#b91c1c; font-weight:800; }
+.de-row { display:flex; align-items:center; gap:10px; }
+.de-row > * { flex:1; }
+.de-progress { height:10px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+.de-progress > div { height:100%; background:linear-gradient(90deg,#60a5fa,#2563eb); }

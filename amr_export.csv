@@ -1,0 +1,8 @@
+id,patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date
+14,P300,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15
+17,P999,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15
+19,P999,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15
+21,P999,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15
+23,P999,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15
+25,P999,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15
+27,P999,M,45,Blood,E.coli,Ciprofloxacin,R,2025-07-15

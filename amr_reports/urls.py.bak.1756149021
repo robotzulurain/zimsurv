@@ -1,0 +1,27 @@
+from django.urls import path
+
+from .views import ManualLabResultView, CustomAuthToken
+from .upload_views import UploadCSVView
+from .list_views import LabResultsList
+from .summary_views import (
+    organism_counts,
+    resistance_profile,
+    resistance_time_trend,
+    common_antibiotics_per_organism,
+)
+
+urlpatterns = [
+    # CRUD / data entry
+    path('manual-entry/', ManualLabResultView.as_view(), name='manual-entry'),
+    path('upload-csv/', UploadCSVView.as_view(), name='upload-csv'),
+    path('lab-results/', LabResultsList.as_view(), name='lab-results'),
+
+    # summaries
+    path('summary/organism-counts/', organism_counts, name='organism-counts'),
+    path('summary/resistance-profile/', resistance_profile, name='resistance-profile'),
+    path('summary/resistance-time-trend/', resistance_time_trend, name='resistance-time-trend'),
+    path('summary/common-antibiotics/', common_antibiotics_per_organism, name='common-antibiotics'),
+
+    # auth
+    path('login/', CustomAuthToken.as_view(), name='api_login'),
+]

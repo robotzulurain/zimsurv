@@ -1,0 +1,8 @@
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.form-grid label{display:flex;flex-direction:column;gap:6px;font-weight:600;color:#111827}
+.form-grid input,.form-grid select{padding:8px;border:1px solid #d1d5db;border-radius:8px}
+.form-actions{grid-column:1 / -1;margin-top:8px}
+.btn.primary{background:#2563eb;color:#fff;border:none;padding:10px 14px;border-radius:10px;cursor:pointer}
+.flash{padding:10px;border-radius:8px;margin-top:10px}
+.flash.ok{background:#ecfdf5;color:#065f46}
+.flash.bad{background:#fef2f2;color:#991b1b}

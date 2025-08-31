@@ -1,0 +1,3 @@
+patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date
+P001,M,34,Blood,E.coli,Ampicillin,R,2025-07-01
+P002,F,22,Urine,Klebsiella,Penicillin,I,2025-07-02

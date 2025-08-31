@@ -1,0 +1,57 @@
+.tabs {
+  display:flex; gap:8px; border-bottom:1px solid #e5e7eb; margin:8px 0 16px;
+  flex-wrap: wrap;
+}
+.tabBtn {
+  appearance:none; border:none; background:#f3f4f6; color:#111827;
+  padding:8px 12px; border-radius:10px 10px 0 0; font-weight:700; cursor:pointer;
+}
+.tabBtn[aria-selected="true"] {
+  background:#ffffff; border:1px solid #e5e7eb; border-bottom-color:#ffffff;
+}
+.panel {
+  background:#ffffff; border:1px solid #e5e7eb; border-radius:0 12px 12px 12px;
+  padding:16px;
+}
+
+/* Card row for Overview */
+.cardRow { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:12px; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+.card h4 { margin:0 0 6px; color:#111827; }
+.card small { color:#374151; }
+
+/* Heatmap table */
+.tableWrap { overflow:auto; }
+.hm {
+  border-collapse: collapse; width:100%; background:#fff;
+}
+.hm th, .hm td {
+  border:1px solid #e5e7eb; padding:8px; text-align:center; white-space:nowrap;
+}
+.hm th { background:#f9fafb; color:#111827; }
+.hm td { color:#111827; }
+
+/* simple %R chip coloring */
+.pctChip {
+  display:inline-block; min-width:44px; padding:2px 6px; border-radius:999px;
+  font-weight:700;
+}
+.pctChip.g { background:#ecfdf5; color:#065f46; }  /* low %R */
+.pctChip.y { background:#fffbeb; color:#78350f; }  /* mid %R */
+.pctChip.r { background:#fef2f2; color:#7f1d1d; }  /* high %R */
+
+/* Compare bar row */
+.compareGrid { display:grid; grid-template-columns: 220px 1fr; gap:12px; align-items:center; }
+.barRow { display:flex; gap:8px; flex-wrap:wrap; }
+.hostBar { display:flex; align-items:center; gap:6px; }
+.hostTag { font-weight:700; color:#111827; min-width:90px; }
+.bar {
+  height:10px; border-radius:999px; background:#e5e7eb; overflow:hidden; width:160px;
+}
+.fillH { height:100%; background:#2563eb; } /* Human */
+.fillA { height:100%; background:#059669; } /* Animal */
+.fillE { height:100%; background:#d97706; } /* Environment */
+.pct { font-weight:700; color:#111827; min-width:48px; text-align:right; }
+.selects { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.selects select { padding:8px; border:1px solid #e5e7eb; border-radius:8px; }
+.help { color:#374151; font-size:14px; margin-top:6px; }

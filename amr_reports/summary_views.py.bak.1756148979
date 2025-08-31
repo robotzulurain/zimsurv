@@ -1,0 +1,59 @@
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.db.models import Count, Q
+from django.db.models.functions import TruncMonth
+from .models import LabResult
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def organism_counts(request):
+    data = (
+        LabResult.objects.values('organism_isolated')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+    return Response(list(data))
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def resistance_profile(request):
+    results = (
+        LabResult.objects
+        .values('organism_isolated', 'antibiotic_tested')
+        .annotate(
+            Resistant=Count('id', filter=Q(susceptibility='Resistant')),
+            Intermediate=Count('id', filter=Q(susceptibility='Intermediate')),
+            Susceptible=Count('id', filter=Q(susceptibility='Susceptible'))
+        )
+        .order_by('organism_isolated', 'antibiotic_tested')
+    )
+    return Response(list(results))
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def resistance_time_trend(request):
+    results = (
+        LabResult.objects
+        .annotate(month=TruncMonth('collection_date'))
+        .values('month', 'organism_isolated')
+        .annotate(
+            Resistant=Count('id', filter=Q(susceptibility='Resistant')),
+            Intermediate=Count('id', filter=Q(susceptibility='Intermediate')),
+            Susceptible=Count('id', filter=Q(susceptibility='Susceptible'))
+        )
+        .order_by('month', 'organism_isolated')
+    )
+    return Response(results)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def common_antibiotics_per_organism(request):
+    results = (
+        LabResult.objects
+        .values('organism_isolated', 'antibiotic_tested')
+        .annotate(count=Count('id'))
+        .order_by('organism_isolated', '-count')
+    )
+    return Response(results)
+

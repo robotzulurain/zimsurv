@@ -1,0 +1,8 @@
+.container { max-width:1120px; margin:20px auto; padding:0 14px; }
+h1 { font-size:22px; font-weight:900; margin:0 0 8px; color:#111827; }
+.tabs { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 16px; }
+.tab {
+  padding:8px 12px; border:1px solid #e5e7eb; border-radius:999px;
+  text-decoration:none; color:#111827; font-weight:700; background:#fff;
+}
+.tab.active { background:#111827; color:#fff; border-color:#111827; }

@@ -1,0 +1,48 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import useMe from './useMe';
+
+// pages
+import Overview from './pages/Overview';
+import Trends from './pages/Trends';
+import Antibiogram from './pages/Antibiogram';
+import DataQuality from './pages/DataQuality';
+import Upload from './pages/Upload';
+import ManualEntry from './pages/ManualEntry';
+import Settings from './pages/Settings';
+import Login from './pages/Login';
+
+export default function App() {
+  const me = useMe();
+  const role = me?.role || 'Viewer';
+
+  return (
+    <Router>
+      <div style={{display:'flex', gap:12, padding:12, borderBottom:'1px solid #222'}}>
+        <Link to="/">Overview</Link>
+        <Link to="/trends">Trends</Link>
+        <Link to="/antibiogram">Antibiogram</Link>
+        <Link to="/data-quality">Data Quality</Link>
+        {role!=='Viewer' && <Link to="/upload">Upload</Link>}
+        {role!=='Viewer' && <Link to="/manual">Manual</Link>}
+        <Link to="/settings">Settings</Link>
+        <div style={{marginLeft:'auto', opacity:.8}}>
+          {me ? `Logged in as ${me.username} (${role})` : <Link to="/login">Login</Link>}
+        </div>
+      </div>
+      <div>
+        <Routes>
+          <Route path="/" element={<Overview/>} />
+          <Route path="/trends" element={<Trends/>} />
+          <Route path="/antibiogram" element={<Antibiogram/>} />
+          <Route path="/data-quality" element={<DataQuality/>} />
+          <Route path="/upload" element={role!=='Viewer' ? <Upload/> : <Navigate to="/" />} />
+          <Route path="/manual" element={role!=='Viewer' ? <ManualEntry/> : <Navigate to="/" />} />
+          <Route path="/settings" element={<Settings/>} />
+          <Route path="/login" element={<Login/>} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}

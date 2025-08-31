@@ -1,0 +1,129 @@
+import React, { useId, useState } from 'react';
+import { apiFetch } from '../api';
+import useLookup from '../hooks/useLookup';
+
+const INITIAL = {
+  patient_id: '', sex: 'M', age: '',
+  specimen_type: '', organism: '',
+  antibiotic: '', ast_result: 'S',
+  test_date: '', host_type: 'human', facility: ''
+};
+
+export default function ManualEntry(){
+  const [form, setForm] = useState(INITIAL);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  // datalist ids
+  const orgId = useId();
+  const abxId = useId();
+  const spId  = useId();
+  const facId = useId();
+
+  // live options (filtered as you type)
+  const orgs = useLookup('/api/lookup/organisms/', form.organism);
+  const abxs = useLookup('/api/lookup/antibiotics/', form.antibiotic);
+  const sps  = useLookup('/api/lookup/specimens/', form.specimen_type);
+  const facs = useLookup('/api/lookup/facilities/', form.facility);
+
+  const set = (k) => (e) => {
+    const v = e.target.value;
+    setForm(prev => (prev[k] === v ? prev : { ...prev, [k]: v }));
+  };
+
+  async function submit(e){
+    e.preventDefault();
+    setMsg(null); setErr(null); setBusy(true);
+    try{
+      const payload = { ...form, age: form.age===''? null : Number(form.age) };
+      const res = await apiFetch('/api/manual-entry/', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if(!res.ok){ setErr(JSON.stringify(json,null,2)); }
+      else { setMsg('Saved!'); setForm(INITIAL); }
+    }catch(_){ setErr('Network error'); }
+    finally{ setBusy(false); }
+  }
+
+  return (
+    <div style={{maxWidth:860, margin:'0 auto', padding:'1rem'}}>
+      <h2>Manual AMR Lab Entry</h2>
+      <form onSubmit={submit} style={{display:'grid', gap:12}}>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+          <label style={{display:'grid', gap:6}}>
+            <span>Patient ID</span>
+            <input type="text" value={form.patient_id} onChange={set('patient_id')} required autoComplete="off"/>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Sex</span>
+            <select value={form.sex} onChange={set('sex')}>
+              <option value="M">M</option><option value="F">F</option>
+            </select>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Age</span>
+            <input type="number" min="0" max="120" value={form.age} onChange={set('age')} required/>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Specimen Type</span>
+            <input type="text" list={spId} value={form.specimen_type} onChange={set('specimen_type')} placeholder="Type or pick…" required/>
+            <datalist id={spId}>{sps.map((s,i)=><option key={i} value={s}/>)}</datalist>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Organism</span>
+            <input type="text" list={orgId} value={form.organism} onChange={set('organism')} placeholder="Type or pick…" required autoCorrect="off" autoCapitalize="none"/>
+            <datalist id={orgId}>{orgs.map((o,i)=><option key={i} value={o}/>)}</datalist>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Antibiotic</span>
+            <input type="text" list={abxId} value={form.antibiotic} onChange={set('antibiotic')} placeholder="Type or pick…" required autoCorrect="off" autoCapitalize="none"/>
+            <datalist id={abxId}>{abxs.map((a,i)=><option key={i} value={a}/>)}</datalist>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>AST Result</span>
+            <select value={form.ast_result} onChange={set('ast_result')}>
+              <option value="S">S (Susceptible)</option>
+              <option value="I">I (Intermediate)</option>
+              <option value="R">R (Resistant)</option>
+            </select>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Test Date</span>
+            <input type="date" value={form.test_date} onChange={set('test_date')} required/>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Host Type</span>
+            <select value={form.host_type} onChange={(e)=>setForm(p=>({...p, host_type:(e.target.value||'').toLowerCase()}))}>
+              <option value="human">Human</option>
+              <option value="animal">Animal</option>
+              <option value="environment">Environment</option>
+            </select>
+          </label>
+
+          <label style={{display:'grid', gap:6}}>
+            <span>Facility (name)</span>
+            <input type="text" list={facId} value={form.facility} onChange={set('facility')} placeholder="e.g., MPILO"/>
+            <datalist id={facId}>{facs.map((f,i)=><option key={i} value={f}/>)}</datalist>
+          </label>
+        </div>
+
+        <div><button disabled={busy} style={{padding:'10px 14px', borderRadius:8}}>{busy?'Saving…':'Save record'}</button></div>
+      </form>
+
+      {msg && <div style={{marginTop:12, color:'#8bff9a'}}>{msg}</div>}
+      {err && <pre style={{marginTop:12, background:'#101010', color:'#ff9393', padding:12, borderRadius:8, overflow:'auto'}}>{err}</pre>}
+    </div>
+  );
+}

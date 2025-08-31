@@ -1,0 +1,31 @@
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;background:#f8fafc;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a}
+.app{min-height:100%}
+.topbar{position:sticky;top:0;z-index:10;background:#0ea5e9;color:#fff;
+  display:flex;align-items:center;gap:16px;padding:10px 16px}
+.brand{font-weight:900}
+.tabs{display:flex;gap:10px;flex-wrap:wrap}
+.tab{color:#fff;text-decoration:none;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.35)}
+.tab.active{background:#fff;color:#0ea5e9;border-color:#fff}
+.main{padding:16px;max-width:1100px;margin:0 auto}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px}
+.grid{display:grid;gap:16px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.section-title{margin:0 0 10px;font-weight:800}
+.selects{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.selects select{padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:white}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
+.kpi{display:flex;flex-direction:column;align-items:center;gap:6px}
+.kpi .v{font-size:26px;font-weight:900;color:#111827}
+.kpi .t{font-weight:700;color:#334155}
+.small{color:#64748b;font-size:13px}
+.legend{display:flex;gap:10px;align-items:center;margin-top:6px}
+.legend .swatch{width:12px;height:12px;border-radius:2px;display:inline-block}
+.subtabs{display:flex;gap:8px;margin:8px 0 14px}
+.subtab{border:1px solid #cbd5e1;background:#fff;padding:6px 10px;border-radius:999px;cursor:pointer;font-weight:700;color:#0f172a}
+.subtab.active{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#f8fafc;font-size:12px}
+.tooltip{position:absolute;background:#111827;color:#fff;padding:6px 8px;border-radius:6px;font-size:12px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap}

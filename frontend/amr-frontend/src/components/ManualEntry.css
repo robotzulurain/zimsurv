@@ -1,0 +1,49 @@
+.manual-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  padding: 20px;
+  margin-top: 20px;
+  max-width: 600px;
+}
+
+.manual-card h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: #0f172a;
+}
+
+.manual-form {
+  display: grid;
+  gap: 14px;
+}
+
+.manual-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.manual-form input,
+.manual-form select {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.manual-form button {
+  padding: 10px;
+  background: linear-gradient(90deg,#4f46e5,#0ea5e9);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.manual-form button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}

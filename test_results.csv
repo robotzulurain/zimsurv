@@ -1,0 +1,4 @@
+patient_id,laboratory_name,organism,antibiotic,susceptibility,date_collected
+12345,Lab A,E.coli,Ciprofloxacin,Resistant,2025-07-28
+12346,Lab A,Klebsiella,Piperacillin,Intermediate,2025-07-28
+12347,Lab B,Staphylococcus,Vancomycin,Susceptible,2025-07-28

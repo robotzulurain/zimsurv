@@ -1,0 +1,9 @@
+.sectionTitle { margin:20px 0 8px; font-weight:800; color:#111827; }
+.barRow { display:flex; align-items:center; gap:10px; margin:8px 0; }
+.barLabel { width:110px; color:#374151; font-size:13px; }
+.barTrack { flex:1; height:12px; background:#f3f4f6; border-radius:999px; overflow:hidden; border:1px solid #e5e7eb; }
+.barFill  { height:100%; background:#ef4444; } /* red indicates %R */
+.barPct { width:62px; text-align:right; font-variant-numeric: tabular-nums; color:#111827; font-weight:700; }
+.small { color:#6b7280; font-size:12px; margin-bottom:8px; }
+.grid2 { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:16px; }
+.card { background:#fff; border:1px solid #d1d5db; border-radius:12px; padding:14px; box-shadow: 0 2px 6px rgba(0,0,0,.06); }

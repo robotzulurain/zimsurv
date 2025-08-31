@@ -1,0 +1,16 @@
+from django.db import models
+
+class LabResult(models.Model):
+    patient_id = models.CharField(max_length=50)
+    sex = models.CharField(max_length=1, choices=[('M', 'Male'), ('F', 'Female')])
+    age = models.PositiveIntegerField()
+    specimen_type = models.CharField(max_length=100)
+    organism = models.CharField(max_length=100)
+    antibiotic = models.CharField(max_length=100)
+    ast_result = models.CharField(
+        max_length=1,
+        choices=[('S', 'Susceptible'), ('I', 'Intermediate'), ('R', 'Resistant')],
+        default='R'
+    )
+    test_date = models.DateField(default='2025-07-01')  # 🟢 FIXED: valid default
+

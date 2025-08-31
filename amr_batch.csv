@@ -1,0 +1,3 @@
+patient_id,sex,age,specimen_type,collection_date,organism_isolated,antibiotic_tested,susceptibility,method,laboratory,facility_location
+P101,Male,42,Blood,2025-07-29,E.coli,Ampicillin,R,Disk,MPILO,Bulawayo
+P102,Female,35,Urine,2025-07-28,Klebsiella,Meropenem,S,Disk,MPILO,Bulawayo

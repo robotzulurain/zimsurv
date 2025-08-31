@@ -1,0 +1,43 @@
+:root{
+  --brand:#0ea5e9;          /* sky-500 */
+  --brand-600:#0284c7;      /* sky-600 */
+  --ink:#0f172a;            /* slate-900 */
+  --muted:#64748b;          /* slate-500 */
+  --bg:#f8fafc;             /* slate-50 */
+  --card:#ffffff;           /* white */
+  --ring: rgba(14,165,233,.35);
+}
+
+.tabs-wrap{
+  display:flex;
+  gap:.5rem;
+  flex-wrap:wrap;
+  background:var(--bg);
+  padding:.5rem;
+  border-radius:12px;
+  border:1px solid #e5e7eb;
+  margin: .5rem 0 1rem;
+}
+
+.tab-link{
+  text-decoration:none;
+  padding:.6rem 1rem;
+  border-radius:999px;
+  background: var(--card);
+  color: var(--muted);
+  font-weight:600;
+  border: 1px solid #e5e7eb;
+  transition:.2s ease;
+}
+
+.tab-link:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(2,132,199,.08);
+}
+
+.tab-link.active{
+  background: linear-gradient(180deg, var(--brand), var(--brand-600));
+  color:#fff;
+  border-color: transparent;
+  box-shadow: 0 6px 18px var(--ring);
+}

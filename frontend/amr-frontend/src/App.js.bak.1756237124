@@ -1,0 +1,50 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import Login from './pages/Login';
+import Overview from './pages/Overview';
+import Trends from './pages/Trends';
+import DataQuality from './pages/DataQuality';
+import OneHealth from './pages/OneHealth';
+import Upload from './pages/Upload';
+import ManualEntry from './pages/ManualEntry';
+
+function Tabs(){
+  const loc = useLocation();
+  const tab = (to, label)=>(
+    <Link to={to} style={{
+      padding:'6px 10px', borderRadius:8, textDecoration:'none',
+      color: loc.pathname===to ? '#111' : '#9ae6b4',
+      background: loc.pathname===to ? '#9ae6b4' : 'transparent'
+    }}>{label}</Link>
+  );
+  return (
+    <nav style={{padding:'8px', display:'flex', gap:8, background:'#0a0a0a', position:'sticky', top:0, zIndex:10}}>
+      {tab('/', 'Overview')}
+      {tab('/trends', 'Trends')}
+      {tab('/one-health', 'One Health')}
+      {tab('/data-quality', 'Data Quality')}
+      {tab('/upload', 'Upload')}
+      {tab('/manual', 'Manual Entry')}
+      {tab('/settings', 'Settings')}
+      <div style={{flex:1}} />
+      {tab('/login', 'Login')}
+    </nav>
+  );
+}
+
+export default function App(){
+  return (
+    <BrowserRouter>
+      <Tabs />
+      <Routes>
+        <Route path="/" element={<Overview/>}/>
+        <Route path="/trends" element={<Trends/>}/>
+        <Route path="/one-health" element={<OneHealth/>}/>
+        <Route path="/data-quality" element={<DataQuality/>}/>
+        <Route path="/upload" element={<Upload/>}/>
+        <Route path="/manual" element={<ManualEntry/>}/>
+        <Route path="/login" element={<Login/>}/>
+      </Routes>
+    </BrowserRouter>
+  );
+}

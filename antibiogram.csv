@@ -1,0 +1,4 @@
+organism,antibiotic,n,R,I,S,%R
+E.coli,Ampicillin,12,9,0,3,75.0
+E.coli,Ciprofloxacin,8,8,0,0,100.0
+E.coli,Penicillin,4,3,0,1,75.0

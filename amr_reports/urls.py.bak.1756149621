@@ -1,0 +1,11 @@
+from django.urls import path
+from . import summary_views, upload_views
+
+urlpatterns = [
+    path('summary/counts/', summary_counts := summary_views.summary_counts, name='summary_counts'),
+    path('summary/top-organisms/', summary_views.top_organisms, name='top_organisms'),
+    path('summary/antibiogram/', summary_views.antibiogram, name='antibiogram'),
+    path('summary/trends-monthly/', summary_views.trends_monthly, name='trends_monthly'),
+
+    path('upload/csv/', upload_views.upload_csv, name='upload_csv'),
+]

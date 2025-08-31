@@ -1,0 +1,11 @@
+.heatmapTable {
+  border-collapse:collapse; width:100%;
+}
+.heatmapTable th, .heatmapTable td {
+  padding:8px 10px; border:1px solid #d1d5db;
+  color:#111827;   /* DARK text */
+}
+.heatmapTable th {
+  background:#f3f4f6; font-weight:800; color:#111827;
+}
+.heatmapTable td.null { color:#6b7280; background:#f9fafb; }

@@ -1,0 +1,3 @@
+patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date,host_type,facility
+P001,M,45,Blood,E.coli,Ampicillin,R,2025-07-10,human,MPILO
+P002,F,30,Urine,Klebsiella,Penicillin,S,2025-08-11,human,MPILO

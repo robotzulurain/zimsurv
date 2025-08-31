@@ -1,0 +1,104 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from io import TextIOWrapper
+import csv
+from datetime import datetime
+
+from .models import LabResult
+from .serializers import LabResultSerializer
+
+REQUIRED_FIELDS = ["patient_id","sex","age","specimen_type","organism","antibiotic","ast_result","test_date"]
+
+OLD_TO_NEW = {
+    "organism_isolated": "organism",
+    "antibiotic_tested": "antibiotic",
+    "susceptibility": "ast_result",
+    "collection_date": "test_date",
+}
+
+def _norm_header(h):
+    return h.strip().lower().replace(" ", "_").replace("-", "_")
+
+def _parse_date(value):
+    if not value:
+        return None
+    v = value.strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(v, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+def _norm_sex(value):
+    if not value: return None
+    v = value.strip().lower()
+    if v in ("m","male"): return "M"
+    if v in ("f","female"): return "F"
+    return v.upper()
+
+def _norm_ast(value):
+    if not value: return None
+    v = value.strip().upper()
+    if v in ("S","SUSCEPTIBLE"): return "S"
+    if v in ("I","INTERMEDIATE"): return "I"
+    if v in ("R","RESISTANT"): return "R"
+    return v
+
+class UploadCSVView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        f = request.FILES.get('file')
+        if not f:
+            return Response({"saved": 0, "errors": ["No file provided."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        decoded = TextIOWrapper(f.file, encoding='utf-8', errors='replace')
+        reader = csv.reader(decoded)
+
+        try:
+            raw_headers = next(reader)
+        except StopIteration:
+            return Response({"saved": 0, "errors": ["Empty CSV file."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        headers = [_norm_header(h) for h in raw_headers]
+        headers_mapped = [OLD_TO_NEW.get(h, h) for h in headers]
+        idx = {h: i for i, h in enumerate(headers_mapped)}
+
+        missing = [c for c in REQUIRED_FIELDS if c not in idx]
+        if missing:
+            return Response(
+                {"saved": 0, "errors": [f"Missing column(s): {', '.join(missing)}"]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        saved = 0
+        errors = []
+        rown = 1
+
+        for raw in reader:
+            rown += 1
+            row = {}
+            for col in REQUIRED_FIELDS:
+                j = idx[col]
+                row[col] = raw[j].strip() if j < len(raw) else ""
+
+            row["sex"] = _norm_sex(row["sex"])
+            row["ast_result"] = _norm_ast(row["ast_result"])
+            row["test_date"] = _parse_date(row["test_date"])
+
+            miss_vals = [k for k in REQUIRED_FIELDS if not row.get(k)]
+            if miss_vals:
+                errors.append(f"Row {rown} — " + "; ".join(f"{k} is required" for k in miss_vals))
+                continue
+
+            ser = LabResultSerializer(data=row)
+            if ser.is_valid():
+                ser.save()
+                saved += 1
+            else:
+                compact = "; ".join(f"{k}: {', '.join([str(m) for m in v])}" for k, v in ser.errors.items())
+                errors.append(f"Row {rown} — {compact}")
+
+        return Response({"saved": saved, "errors": errors}, status=status.HTTP_200_OK)

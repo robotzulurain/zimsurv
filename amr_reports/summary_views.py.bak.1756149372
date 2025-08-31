@@ -1,0 +1,105 @@
+from django.db.models import Count, Q
+from django.db.models.functions import TruncMonth
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.utils.dateparse import parse_date
+
+from .models import LabResult
+
+def _filtered_qs(request):
+    qs = LabResult.objects.all()
+    organism = (request.GET.get('organism') or '').strip()
+    antibiotic = (request.GET.get('antibiotic') or '').strip()
+    specimen = (request.GET.get('specimen_type') or '').strip()
+    date_from = parse_date(request.GET.get('date_from') or '')
+    date_to   = parse_date(request.GET.get('date_to') or '')
+    search    = (request.GET.get('q') or '').strip()
+
+    if organism:
+        qs = qs.filter(organism__iexact=organism)
+    if antibiotic:
+        qs = qs.filter(antibiotic__iexact=antibiotic)
+    if specimen:
+        qs = qs.filter(specimen_type__iexact=specimen)
+    if date_from:
+        qs = qs.filter(test_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(test_date__lte=date_to)
+    if search:
+        qs = qs.filter(
+            Q(patient_id__icontains=search) |
+            Q(organism__icontains=search) |
+            Q(antibiotic__icontains=search)
+        )
+    return qs
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def organism_counts(request):
+    data = (
+        _filtered_qs(request)
+        .values('organism')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+    return Response(list(data))
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def resistance_profile(request):
+    results = (
+        _filtered_qs(request)
+        .values('organism', 'antibiotic')
+        .annotate(
+            S=Count('id', filter=Q(ast_result__iexact='S')),
+            I=Count('id', filter=Q(ast_result__iexact='I')),
+            R=Count('id', filter=Q(ast_result__iexact='R')),
+        )
+        .order_by('organism', 'antibiotic')
+    )
+    return Response(list(results))
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def resistance_time_trend(request):
+    """
+    Returns monthly S/I/R counts (optionally filter by organism/antibiotic/specimen/date range)
+    [
+      {"month":"2025-07-01", "organism":"E.coli", "antibiotic":"Ciprofloxacin", "S":10, "I":2, "R":15}, ...
+    ]
+    """
+    results = (
+        _filtered_qs(request)
+        .annotate(month=TruncMonth('test_date'))
+        .values('month', 'organism', 'antibiotic')
+        .annotate(
+            S=Count('id', filter=Q(ast_result__iexact='S')),
+            I=Count('id', filter=Q(ast_result__iexact='I')),
+            R=Count('id', filter=Q(ast_result__iexact='R')),
+        )
+        .order_by('month', 'organism', 'antibiotic')
+    )
+    # DRF can serialize dates, but make explicit strings if you prefer:
+    out = []
+    for r in results:
+        out.append({
+            "month": r["month"].strftime("%Y-%m-01") if r["month"] else None,
+            "organism": r["organism"],
+            "antibiotic": r["antibiotic"],
+            "S": r["S"],
+            "I": r["I"],
+            "R": r["R"],
+        })
+    return Response(out)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def common_antibiotics_per_organism(request):
+    results = (
+        _filtered_qs(request)
+        .values('organism', 'antibiotic')
+        .annotate(count=Count('id'))
+        .order_by('organism', '-count')
+    )
+    return Response(list(results))

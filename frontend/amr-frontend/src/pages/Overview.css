@@ -1,0 +1,62 @@
+/* Layout */
+.ov { display:flex; flex-direction:column; gap:16px; }
+.ov .row { display:grid; gap:16px; grid-template-columns: 1fr; }
+@media (min-width: 960px) {
+  .ov .row.two { grid-template-columns: 1.1fr 1fr; }
+  .ov .kpiGrid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* Hero */
+.hero {
+  border-radius: 18px; padding: 20px;
+  background: radial-gradient(1200px 400px at 0% -10%, #e0f2fe 0, #ffffff 50%), linear-gradient(#ffffff, #ffffff);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 20px rgba(2,6,23,.06);
+  display:flex; flex-wrap:wrap; align-items:center; gap:12px; justify-content:space-between;
+}
+.heroLeft { display:flex; flex-direction:column; gap:4px; }
+.title { font-size:22px; font-weight:900; color:#0f172a; letter-spacing:.2px; }
+.subtitle { color:#475569; }
+.controls { display:flex; gap:10px; flex-wrap:wrap; }
+.select {
+  padding:8px 10px; border:1px solid #cbd5e1; border-radius:12px; background:#fff; color:#0f172a;
+}
+
+/* Card base */
+.card {
+  background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+  padding:16px; box-shadow: 0 8px 20px rgba(2,6,23,.05);
+}
+.cardTitle { font-size:15px; font-weight:800; color:#0f172a; margin-bottom:8px; }
+.cardSub { color:#64748b; margin-top:-4px; margin-bottom:10px; }
+
+/* KPI grid */
+.kpiGrid { display:grid; gap:12px; grid-template-columns: repeat(2, 1fr); }
+.kpi {
+  background: linear-gradient(180deg,#f8fafc,#ffffff);
+  border:1px solid #e2e8f0; border-radius:14px; padding:14px;
+}
+.kpi .t { font-size:12px; color:#475569; font-weight:700; margin-bottom:6px; }
+.kpi .v { font-size:26px; font-weight:900; color:#0f172a; line-height:1; }
+.kpi .note { font-size:12px; color:#64748b; margin-top:4px; }
+
+/* Chips */
+.chips { display:flex; gap:8px; flex-wrap:wrap; }
+.chip {
+  background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:800;
+  padding:4px 10px; border-radius:999px; font-size:12px;
+}
+
+/* Table */
+.table { width:100%; border-collapse:collapse; }
+.table th, .table td { text-align:left; padding:8px; border-bottom:1px solid #eaeef3; font-size:14px; }
+.table th { color:#0f172a; font-weight:800; }
+
+/* Mini charts */
+.spark { height:54px; width:100%; }
+.axis { stroke:#cbd5e1; stroke-width:1; }
+.lineT { fill:none; stroke:#2563eb; stroke-width:2; }
+.lineR { fill:none; stroke:#ef4444; stroke-width:2; }
+.gridY { stroke:#e5e7eb; stroke-width:1; }
+
+.center { color:#64748b; text-align:center; }

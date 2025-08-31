@@ -1,0 +1,5 @@
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#0ea5e9;color:white;flex-wrap:wrap}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{color:#ecfeff;text-decoration:none;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.3);font-weight:600}
+.tab.active{background:white;color:#0369a1;border-color:white}
+.tab:hover{background:rgba(255,255,255,.18)}

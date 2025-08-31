@@ -1,0 +1,54 @@
+.trWrap { display:grid; gap:14px; }
+.trHeader { display:flex; justify-content:space-between; align-items:flex-end; }
+.trHeader h2 { font-weight:800; color:#0a0f1a; }
+
+.trControls { display:flex; gap:12px; }
+.field{ display:grid; gap:6px; }
+.field label{ font-size:12px; color:#0a0f1a; font-weight:700; opacity:.9; }
+.field select{
+  padding:10px 12px; border:1px solid #cbd5e1; border-radius:12px; background:#fff; color:#0a0f1a; font-weight:600;
+}
+
+.card {
+  background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px;
+  box-shadow: 0 6px 18px rgba(2,8,23,0.05);
+}
+.mtTitle { margin-bottom:10px; color:#0a0f1a; font-weight:800; }
+
+.months { display:grid; gap:10px; }
+.monthRow{ display:grid; grid-template-columns: 220px 1fr auto; gap:12px; align-items:center; }
+.mMonth{ font-weight:900; color:#0a0f1a; }
+.mCounts{ font-size:12px; color:#0b1220; opacity:.8; }
+
+.mBar{
+  height:16px; border-radius:999px; background:#e2e8f0; overflow:hidden; display:flex;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.10);
+}
+.seg{ height:100%; }
+.segS{ background:#16a34a; }
+.segI{ background:#d97706; }
+.segR{ background:#dc2626; }
+
+.mPct{ display:flex; gap:8px; }
+.pill{
+  font-size:12px; padding:3px 10px; border-radius:999px; font-weight:800;
+  color:#0a0f1a; border:1px solid rgba(2,6,23,.12); background:#f8fafc;
+}
+.pillS{ background:#bbf7d0; }
+.pillI{ background:#fde68a; }
+.pillR{ background:#fecaca; }
+
+.legend{ display:flex; gap:18px; align-items:center; margin-top:8px; color:#0a0f1a; font-weight:700; }
+.legend .dot{ width:11px; height:11px; border-radius:999px; display:inline-block; margin-right:6px; }
+.legend .s{ background:#16a34a; }
+.legend .i{ background:#d97706; }
+.legend .r{ background:#dc2626; }
+
+.tableWrap{ overflow:auto; }
+.niceTable{ border-collapse:collapse; width:100%; }
+.niceTable th, .niceTable td{
+  border:1px solid #e5e7eb; padding:8px 10px; color:#0a0f1a;
+}
+.niceTable th{ background:#f1f5f9; font-weight:900; }
+.muted{ color:#334155; }
+.error{ color:#b91c1c; }

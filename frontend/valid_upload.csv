@@ -1,0 +1,3 @@
+patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date
+P321,M,29,Blood,E.coli,Ampicillin,R,2025-08-05
+P654,F,41,Urine,Klebsiella,Penicillin,S,2025-08-06
