@@ -1,7 +1,7 @@
 [build]
-  base = "amr-ui"          # where package.json lives
+  base = "amr-ui"          # Netlify runs from /amr-ui
   command = "npm run build"
-  publish = "amr-ui/dist"
+  publish = "dist"         # <-- relative to amr-ui
 
 [build.environment]
   NODE_VERSION = "20"
