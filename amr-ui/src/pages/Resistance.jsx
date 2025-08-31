@@ -6,27 +6,41 @@ export default function Resistance() {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    api.trend().then(setRows).catch(e=>setErr(String(e.message||e)));
+    api.trend()
+      .then(d => Array.isArray(d) ? d : [])
+      .then(setRows)
+      .catch(e=>setErr(String(e.message||e)));
   }, []);
+
+  const safeRows = Array.isArray(rows) ? rows : [];
 
   return (
     <section>
       <h2 className="section-title">Resistance (monthly %R)</h2>
       {err && <div className="error">{err}</div>}
       <div className="card" style={{padding:12}}>
-        <table className="table small">
-          <thead><tr><th>Month</th><th>Total</th><th>Resistant</th><th>%R</th></tr></thead>
-          <tbody>
-            {rows.map(r=>(
-              <tr key={r.month}>
-                <td>{r.month}</td>
-                <td>{r.total}</td>
-                <td>{r.resistant}</td>
-                <td>{r.percent_R}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {safeRows.length===0 ? (
+          <div className="small">No data</div>
+        ) : (
+          <table className="table small">
+            <thead><tr><th>Month</th><th>Total</th><th>Resistant</th><th>%R</th></tr></thead>
+            <tbody>
+              {safeRows.map((r,i)=>{
+                const total = Number(r?.total ?? 0);
+                const resistant = Number(r?.resistant ?? 0);
+                const pct = Number(r?.percent_R ?? (total? (resistant/total*100) : 0)).toFixed(2);
+                return (
+                  <tr key={`${r?.month ?? i}`}>
+                    <td>{r?.month ?? '—'}</td>
+                    <td>{total}</td>
+                    <td>{resistant}</td>
+                    <td>{pct}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </section>
   );

@@ -16,23 +16,32 @@ export default function SexAge(){
   const [labs,setLabs] = useState([]);
   const [err,setErr] = useState("");
 
-  useEffect(()=>{ api.lab().then(d=>setLabs(d?.results||[])).catch(e=>setErr(String(e.message||e))); },[]);
+  useEffect(()=>{
+    api.lab()
+      .then(d => Array.isArray(d) ? d : (Array.isArray(d?.results)? d.results : []))
+      .then(setLabs)
+      .catch(e=>setErr(String(e.message||e)));
+  },[]);
 
   const table = useMemo(()=>{
     const init = BANDS.map(b=>({band:b.label, M:0, F:0, U:0, Total:0}));
-    const findBand = (age)=>{
-      const a = Number(age||0);
-      return BANDS.find(b=>a>=b.min && a<=(b.max ?? a))?.label || '0-4';
-    };
     const rows = Object.fromEntries(init.map(r=>[r.band, r]));
-    for(const r of labs){
-      const band = findBand(r.age);
-      const sex = (r.sex||'U').toUpperCase().startsWith('M')?'M':(r.sex||'U').toUpperCase().startsWith('F')?'F':'U';
+    const findBand = (age)=>{
+      const a = Number(age ?? 0);
+      const band = BANDS.find(b=>a>=b.min && a<=(b.max ?? a));
+      return band?.label ?? '0-4';
+    };
+    for(const r of (Array.isArray(labs)? labs : [])){
+      const band = findBand(r?.age);
+      const s = String(r?.sex||'U').trim().toUpperCase();
+      const sex = s.startsWith('M')?'M':s.startsWith('F')?'F':'U';
       rows[band][sex] += 1;
       rows[band].Total += 1;
     }
     return BANDS.map(b=>rows[b.label]);
   },[labs]);
+
+  const maxTotal = Math.max(1, ...table.map(r=>r.Total||0));
 
   return (
     <section>
@@ -42,13 +51,28 @@ export default function SexAge(){
         <table className="table small">
           <thead><tr><th>Age band</th><th>Male</th><th>Female</th><th>Unknown</th><th>Total</th></tr></thead>
           <tbody>
-            {table.map(r=>(
-              <tr key={r.band}>
-                <td>{r.band}</td><td>{r.M}</td><td>{r.F}</td><td>{r.U}</td><td>{r.Total}</td>
-              </tr>
-            ))}
+            {table.map(r=>{
+              const w = Math.round((Number(r.Total||0)/maxTotal)*100);
+              return (
+                <tr key={r.band}>
+                  <td style={{whiteSpace:'nowrap'}}>{r.band}</td>
+                  <td>{r.M}</td>
+                  <td>{r.F}</td>
+                  <td>{r.U}</td>
+                  <td style={{minWidth:130}}>
+                    <div className="small" style={{display:'flex', gap:8, alignItems:'center'}}>
+                      <span>{r.Total}</span>
+                      <div style={{flex:1, height:8, background:'#eee', borderRadius:6}}>
+                        <div style={{height:'100%', width:`${w}%`, borderRadius:6}} />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {table.every(r=>r.Total===0) && <div className="small" style={{marginTop:8}}>No records yet.</div>}
       </div>
     </section>
   );
