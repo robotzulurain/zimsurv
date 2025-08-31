@@ -1,0 +1,13 @@
+[build]
+  base = "amr-ui"          # where package.json lives
+  command = "npm run build"
+  publish = "amr-ui/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback so React Router works on refresh
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
