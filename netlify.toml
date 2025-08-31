@@ -1,18 +1,14 @@
 [build]
-  base = "amr-ui"          # Netlify runs from /amr-ui
+  base = "amr-ui"
   command = "npm run build"
-  publish = "dist"         # <-- relative to amr-ui
-
-[build.environment]
-  NODE_VERSION = "20"
-
-# SPA fallback so React Router works on refresh
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
   VITE_API_BASE = "https://amr-app.onrender.com"
   VITE_API_TOKEN = "feb91ba9962758d186f6d011ed93bee659998aa8"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
