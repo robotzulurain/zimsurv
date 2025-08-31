@@ -20,7 +20,6 @@ class DataEntryCreate(APIView):
             return Response(LabResultSerializer(obj).data, status=status.HTTP_201_CREATED)
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class DataEntryBulk(APIView):
     """
     POST /api/data-entry/bulk/
@@ -36,7 +35,7 @@ class DataEntryBulk(APIView):
 
         ser = LabResultSerializer(data=rows, many=True)
         if ser.is_valid():
-            objs = ser.save()  # creates many
+            objs = ser.save()
             return Response(
                 {"created": len(objs), "samples": LabResultSerializer(objs[:5], many=True).data},
                 status=status.HTTP_201_CREATED
