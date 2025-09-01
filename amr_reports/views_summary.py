@@ -135,3 +135,119 @@ def lab_results(request):
         return JsonResponse({"results": results})
     except Exception:
         return JsonResponse({"results": []})
+
+# -------------------------
+# Sex & Age matrix endpoint
+# -------------------------
+from collections import defaultdict
+
+def _table_exists(name="amr_reports_labresult"):
+    try:
+        with connection.cursor() as cur:
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=%s", [name])
+            return bool(cur.fetchone())
+    except Exception:
+        return False
+
+def _columns_in_table(name="amr_reports_labresult"):
+    try:
+        with connection.cursor() as cur:
+            cur.execute(f"PRAGMA table_info({name})")
+            # colinfo: cid, name, type, notnull, dflt_value, pk
+            return {row[1] for row in cur.fetchall()}
+    except Exception:
+        return set()
+
+AGE_BANDS = [
+    (0, 4, "0-4"),
+    (5, 14, "5-14"),
+    (15, 24, "15-24"),
+    (25, 34, "25-34"),
+    (35, 44, "35-44"),
+    (45, 54, "45-54"),
+    (55, 64, "55-64"),
+    (65, 200, "65+"),
+]
+
+def _band_for_age(age_val):
+    try:
+        a = int(age_val)
+    except Exception:
+        return None
+    for lo, hi, label in AGE_BANDS:
+        if lo <= a <= hi:
+            return label
+    return "65+"
+
+def sex_age_matrix(request):
+    """
+    Returns an age-band x sex matrix with optional filters:
+      ?organism=...&antibiotic=...&host=...
+    Never 500s; returns empty matrix if table/columns missing.
+    Response:
+    {
+      "rows":[{"band":"0-4","M":10,"F":7,"U":1,"total":18}, ...],
+      "filters":{"organism":"...", "antibiotic":"...", "host":"..."}
+    }
+    """
+    if not _table_exists():
+        return JsonResponse({"rows": [], "filters": {}})
+
+    cols = _columns_in_table()
+    needed = {"age", "sex"}
+    if not needed.issubset(cols):
+        return JsonResponse({"rows": [], "filters": {}})
+
+    # Build SELECT column list based on what exists
+    select_cols = ["age", "sex"]
+    # Optional filterable columns if present
+    can_filter = {}
+    for k, col in (("organism", "organism"), ("antibiotic", "antibiotic"), ("host", "host_type")):
+        if col in cols:
+            can_filter[k] = col
+            select_cols.append(col)
+
+    # Filters from query params (only if column exists)
+    where = []
+    args  = []
+    filters_used = {}
+    for qkey, col in can_filter.items():
+        val = request.GET.get(qkey)
+        if val and val.lower() != "all":
+            where.append(f"{col} = ?")
+            args.append(val)
+            filters_used[qkey] = val
+
+    sql = f"SELECT {', '.join(select_cols)} FROM amr_reports_labresult"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY rowid DESC LIMIT 10000"  # safety cap
+
+    # Aggregate in Python
+    counts = defaultdict(lambda: {"M": 0, "F": 0, "U": 0})
+    try:
+        with connection.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+            # Build index map
+            idx = {name: i for i, name in enumerate(select_cols)}
+            for r in rows:
+                band = _band_for_age(r[idx["age"]])
+                if not band:
+                    continue
+                sex = (r[idx["sex"]] or "").upper()
+                if sex not in ("M", "F"):
+                    sex = "U"
+                counts[band][sex] += 1
+    except Exception:
+        return JsonResponse({"rows": [], "filters": filters_used})
+
+    # Emit rows in band order with totals
+    out_rows = []
+    for _, _, label in AGE_BANDS:
+        m = counts[label]["M"] if label in counts else 0
+        f = counts[label]["F"] if label in counts else 0
+        u = counts[label]["U"] if label in counts else 0
+        out_rows.append({"band": label, "M": m, "F": f, "U": u, "total": m + f + u})
+
+    return JsonResponse({"rows": out_rows, "filters": filters_used})
