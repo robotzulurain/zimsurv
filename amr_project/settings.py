@@ -10,35 +10,13 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # Allow hosts from env or default to Render + local
 _allowed = os.getenv("ALLOWED_HOSTS", ".onrender.com,localhost,127.0.0.1")
-ALLOWED_HOSTS = ['127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app']
-    '127.0.0.1',
-    'localhost',
-    'amr-app.onrender.com',
-    'stirring-alpaca-e31b52.netlify.app',
-]
 
 # Installed apps
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'rest_framework.authtoken',
-    'amr_reports',
 ]
 
 MIDDLEWARE = [
     'amr_project.mw_cors_simple.SimpleCORSMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'amr_project.urls'
@@ -50,10 +28,6 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
             ],
         },
     },
@@ -94,23 +68,17 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
     ],
 }
-    'https://stirring-alpaca-e31b52.netlify.app',
-    'http://localhost:5173',
 ]
 
 # === DRF config ===
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
     ],
 }
     "authorization",
@@ -120,7 +88,6 @@ REST_FRAMEWORK = {
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://stirring-alpaca-e31b52.netlify.app',
 ]
 
 # === CORS (browser) ===
@@ -140,25 +107,16 @@ if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
     MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
 
 # Allow your Netlify site and local dev
-    'https://stirring-alpaca-e31b52.netlify.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
 ]))
 
 # Allow Authorization header so Token auth works
 from corsheaders.defaults import default_headers
-    'authorization',
-    'content-type',
-    'accept',
-    'origin',
 ]))
 
 # Hosts that can serve Django (Render + local)
 try:
     ALLOWED_HOSTS
 except NameError:
-ALLOWED_HOSTS = ['127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app']
-for h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
     if h not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(h)
 
@@ -200,13 +158,7 @@ except Exception:
 
 # Helpful (not strictly required for GET)
 CSRF_TRUSTED_ORIGINS = list(set((
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://stirring-alpaca-e31b52.netlify.app',
     *(CSRF_TRUSTED_ORIGINS if 'CSRF_TRUSTED_ORIGINS' in globals() else [])
 )))
 # Harmless to include; not required for CORS
 ALLOWED_HOSTS = ['127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app']
-    '127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app',
-    *ALLOWED_HOSTS
-)))
