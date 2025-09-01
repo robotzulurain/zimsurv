@@ -193,3 +193,35 @@ except Exception:
 for _h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
     if _h not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_h)
+
+# === CORS (debug-safe) ===
+# Requires: django-cors-headers
+if 'corsheaders' not in INSTALLED_APPS:
+    INSTALLED_APPS += ['corsheaders']
+
+# Put CorsMiddleware at the very top (before CommonMiddleware)
+if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
+    MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
+
+# TEMP while we debug: allow everything (remove after it works)
+CORS_ALLOW_ALL_ORIGINS = True
+
+# Allow Authorization so Token auth works from the browser
+try:
+    from corsheaders.defaults import default_headers
+    CORS_ALLOW_HEADERS = list(default_headers) + ['authorization']
+except Exception:
+    CORS_ALLOW_HEADERS = ['authorization','content-type','accept','origin']
+
+# Helpful (not strictly required for GET)
+CSRF_TRUSTED_ORIGINS = list(set((
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://stirring-alpaca-e31b52.netlify.app',
+    *(CSRF_TRUSTED_ORIGINS if 'CSRF_TRUSTED_ORIGINS' in globals() else [])
+)))
+# Harmless to include; not required for CORS
+ALLOWED_HOSTS = list(set((
+    '127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app',
+    *ALLOWED_HOSTS
+)))
