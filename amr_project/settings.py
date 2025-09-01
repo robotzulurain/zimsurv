@@ -25,14 +25,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
     'amr_reports',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
+    'amr_project.mw_cors_simple.SimpleCORSMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -92,7 +91,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # CORS (for Netlify/React frontend)
-CORS_ALLOW_ALL_ORIGINS = True
 
 
 REST_FRAMEWORK = {
@@ -103,12 +101,9 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
 }
-CORS_ALLOWED_ORIGINS = [
     'https://stirring-alpaca-e31b52.netlify.app',
     'http://localhost:5173',
 ]
-
-CORS_ALLOW_HEADERS = ['authorization', 'content-type', 'accept', 'origin']
 
 # === DRF config ===
 REST_FRAMEWORK = {
@@ -119,7 +114,6 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
-CORS_ALLOW_HEADERS = [
     "authorization",
     "content-type",
     "accept",
@@ -147,7 +141,6 @@ if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
     MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
 
 # Allow your Netlify site and local dev
-CORS_ALLOWED_ORIGINS = list(set([
     'https://stirring-alpaca-e31b52.netlify.app',
     'http://localhost:5173',
     'http://localhost:3000',
@@ -155,7 +148,6 @@ CORS_ALLOWED_ORIGINS = list(set([
 
 # Allow Authorization header so Token auth works
 from corsheaders.defaults import default_headers
-CORS_ALLOW_HEADERS = list(set(list(default_headers) + [
     'authorization',
     'content-type',
     'accept',
@@ -180,14 +172,11 @@ if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
     MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
 
 # TEMP: allow all origins while we debug (remove after it works)
-CORS_ALLOW_ALL_ORIGINS = True
 
 # Allow Authorization header so Token auth works
 try:
     from corsheaders.defaults import default_headers
-    CORS_ALLOW_HEADERS = list(default_headers) + ['authorization']
 except Exception:
-    CORS_ALLOW_HEADERS = ['authorization', 'content-type', 'accept', 'origin']
 
 # Make sure your hosts include Render + Netlify + local
 for _h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
@@ -204,14 +193,11 @@ if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
     MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
 
 # TEMP while we debug: allow everything (remove after it works)
-CORS_ALLOW_ALL_ORIGINS = True
 
 # Allow Authorization so Token auth works from the browser
 try:
     from corsheaders.defaults import default_headers
-    CORS_ALLOW_HEADERS = list(default_headers) + ['authorization']
 except Exception:
-    CORS_ALLOW_HEADERS = ['authorization','content-type','accept','origin']
 
 # Helpful (not strictly required for GET)
 CSRF_TRUSTED_ORIGINS = list(set((
