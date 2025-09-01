@@ -170,3 +170,26 @@ except NameError:
 for h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
     if h not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(h)
+
+# ==== CORS DEBUG SETUP ====
+# pip install django-cors-headers
+if 'corsheaders' not in INSTALLED_APPS:
+    INSTALLED_APPS += ['corsheaders']
+
+if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
+    MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
+
+# TEMP: allow all origins while we debug (remove after it works)
+CORS_ALLOW_ALL_ORIGINS = True
+
+# Allow Authorization header so Token auth works
+try:
+    from corsheaders.defaults import default_headers
+    CORS_ALLOW_HEADERS = list(default_headers) + ['authorization']
+except Exception:
+    CORS_ALLOW_HEADERS = ['authorization', 'content-type', 'accept', 'origin']
+
+# Make sure your hosts include Render + Netlify + local
+for _h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
+    if _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
