@@ -10,7 +10,7 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # Allow hosts from env or default to Render + local
 _allowed = os.getenv("ALLOWED_HOSTS", ".onrender.com,localhost,127.0.0.1")
-ALLOWED_HOSTS = [
+ALLOWED_HOSTS = ['127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app']
     '127.0.0.1',
     'localhost',
     'amr-app.onrender.com',
@@ -92,7 +92,6 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # CORS (for Netlify/React frontend)
 
-
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
@@ -158,7 +157,7 @@ from corsheaders.defaults import default_headers
 try:
     ALLOWED_HOSTS
 except NameError:
-    ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app']
 for h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
     if h not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(h)
@@ -207,7 +206,7 @@ CSRF_TRUSTED_ORIGINS = list(set((
     *(CSRF_TRUSTED_ORIGINS if 'CSRF_TRUSTED_ORIGINS' in globals() else [])
 )))
 # Harmless to include; not required for CORS
-ALLOWED_HOSTS = list(set((
+ALLOWED_HOSTS = ['127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app']
     '127.0.0.1','localhost','amr-app.onrender.com','stirring-alpaca-e31b52.netlify.app',
     *ALLOWED_HOSTS
 )))
