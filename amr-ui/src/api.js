@@ -1,7 +1,6 @@
 const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/,'');
 const TOKEN = import.meta.env.VITE_API_TOKEN;
 
-// Pull an array out of common wrapper keys, otherwise return null
 function extractArray(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return null;
@@ -22,7 +21,7 @@ async function fetchJSON(path, opts = {}) {
     ...opts,
   });
   if (!r.ok) {
-    const txt = await r.text().catch(()=>'');
+    const txt = await r.text().catch(()=> '');
     throw new Error(`HTTP ${r.status} - ${txt || r.statusText}`);
   }
   const data = await r.json();
@@ -30,12 +29,8 @@ async function fetchJSON(path, opts = {}) {
   return arr ?? data;
 }
 
-// Backwards-compatible named export used by existing pages
-export async function apiFetch(path, opts) {
-  return fetchJSON(path, opts);
-}
+export async function apiFetch(path, opts) { return fetchJSON(path, opts); }
 
-// Nice convenience wrapper if you want it
 export const api = {
   counts:        () => fetchJSON('/api/summary/counts-summary/'),
   trend:         () => fetchJSON('/api/summary/resistance-time-trend/'),
