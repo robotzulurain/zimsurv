@@ -1,47 +1,50 @@
-import React, { useEffect, useState } from "react";
-import { api } from "../api";
+import React, { useEffect, useMemo, useState } from 'react'
+import { apiFetch } from '../api'
+import { isArr } from '../util/isArray'
+import PercentBar from '../components/PercentBar'
 
-export default function Resistance() {
-  const [rows, setRows] = useState([]);
-  const [err, setErr] = useState("");
+export default function Resistance(){
+  const [raw, setRaw] = useState(null)
+  const [err, setErr] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    api.trend()
-      .then(d => Array.isArray(d) ? d : [])
-      .then(setRows)
-      .catch(e=>setErr(String(e.message||e)));
-  }, []);
+  useEffect(()=>{
+    let on=true
+    setLoading(true)
+    apiFetch('/api/summary/resistance-time-trend/')
+      .then(d=>{ if(on) setRaw(d) })
+      .catch(e=>{ if(on) setErr(String(e)) })
+      .finally(()=> on && setLoading(false))
+    return ()=>{ on=false }
+  },[])
 
-  const safeRows = Array.isArray(rows) ? rows : [];
+  const series = useMemo(()=>{
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw
+    if (Array.isArray(raw.series)) return raw.series
+    if (Array.isArray(raw.results)) return raw.results
+    return []
+  },[raw])
+
+  if (loading) return <div className="card">Loading…</div>
+  if (err) return <div className="card error">Error: {err}</div>
+  if (!isArr(series)) return <div className="card">No data</div>
 
   return (
     <section>
       <h2 className="section-title">Resistance (monthly %R)</h2>
-      {err && <div className="error">{err}</div>}
-      <div className="card" style={{padding:12}}>
-        {safeRows.length===0 ? (
-          <div className="small">No data</div>
-        ) : (
-          <table className="table small">
-            <thead><tr><th>Month</th><th>Total</th><th>Resistant</th><th>%R</th></tr></thead>
-            <tbody>
-              {safeRows.map((r,i)=>{
-                const total = Number(r?.total ?? 0);
-                const resistant = Number(r?.resistant ?? 0);
-                const pct = Number(r?.percent_R ?? (total? (resistant/total*100) : 0)).toFixed(2);
-                return (
-                  <tr key={`${r?.month ?? i}`}>
-                    <td>{r?.month ?? '—'}</td>
-                    <td>{total}</td>
-                    <td>{resistant}</td>
-                    <td>{pct}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="grid" style={{gap:12}}>
+        {series.map((row, idx)=>{
+          const label = row.month || row.period || row.label || `#${idx+1}`
+          const pct = row.percent_R ?? row.percent ?? row.pct ?? 0
+          return (
+            <div key={idx} className="card">
+              <div style={{fontWeight:600, marginBottom:6}}>{label}</div>
+              <PercentBar value={pct} max={100} height={12} />
+            </div>
+          )
+        })}
       </div>
     </section>
-  );
+  )
 }

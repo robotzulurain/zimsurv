@@ -1,79 +1,93 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import React, { useEffect, useMemo, useState } from 'react'
+import { apiFetch } from '../api'
+import { isArr } from '../util/isArray'
 
-const BANDS = [
-  {label:'0-4',  min:0, max:4},
-  {label:'5-14', min:5, max:14},
-  {label:'15-24',min:15, max:24},
-  {label:'25-34',min:25, max:34},
-  {label:'35-44',min:35, max:44},
-  {label:'45-54',min:45, max:54},
-  {label:'55-64',min:55, max:64},
-  {label:'65+',  min:65, max:200}
-];
+const DEFAULT_BANDS = ['0-4','5-14','15-24','25-34','35-44','45-54','55-64','65+']
+const SEX_COLS = ['Male','Female','Unknown']
 
 export default function SexAge(){
-  const [labs,setLabs] = useState([]);
-  const [err,setErr] = useState("");
+  const [raw, setRaw] = useState(null)
+  const [err, setErr] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(()=>{
-    api.lab()
-      .then(d => Array.isArray(d) ? d : (Array.isArray(d?.results)? d.results : []))
-      .then(setLabs)
-      .catch(e=>setErr(String(e.message||e)));
-  },[]);
+    let on=true
+    setLoading(true)
+    apiFetch('/api/summary/data-quality/') // we’ll reuse if it includes age/sex – else fallback call below
+      .then(d=>{ if(on) setRaw(d) })
+      .catch(async ()=>{
+        // fallback to lab-results and aggregate client-side
+        try{
+          const lr = await apiFetch('/api/lab-results/')
+          if (on) setRaw({ lab_results: lr.results || [] })
+        }catch(e2){ if(on) setErr(String(e2)) }
+      })
+      .finally(()=> on && setLoading(false))
+    return ()=>{ on=false }
+  },[])
 
-  const table = useMemo(()=>{
-    const init = BANDS.map(b=>({band:b.label, M:0, F:0, U:0, Total:0}));
-    const rows = Object.fromEntries(init.map(r=>[r.band, r]));
-    const findBand = (age)=>{
-      const a = Number(age ?? 0);
-      const band = BANDS.find(b=>a>=b.min && a<=(b.max ?? a));
-      return band?.label ?? '0-4';
-    };
-    for(const r of (Array.isArray(labs)? labs : [])){
-      const band = findBand(r?.age);
-      const s = String(r?.sex||'U').trim().toUpperCase();
-      const sex = s.startsWith('M')?'M':s.startsWith('F')?'F':'U';
-      rows[band][sex] += 1;
-      rows[band].Total += 1;
+  const rows = useMemo(()=>{
+    // Accept shapes:
+    // 1) { table:[{age_band, Male, Female, Unknown, Total}, ...] }
+    // 2) { results:[...] } or [] of { age_band, ... }
+    // 3) { lab_results:[...] } -> aggregate here
+    if (!raw) return []
+
+    if (Array.isArray(raw.table)) return raw.table
+    if (Array.isArray(raw.results)) return raw.results
+
+    if (Array.isArray(raw.lab_results)) {
+      const acc = Object.fromEntries(DEFAULT_BANDS.map(b=>[b,{Male:0,Female:0,Unknown:0,Total:0}]))
+      for (const r of raw.lab_results) {
+        const age = Number.isFinite(r.age) ? r.age : 0
+        const sex = (r.sex || '').toUpperCase()==='F' ? 'Female' : ( (r.sex || '').toUpperCase()==='M' ? 'Male' : 'Unknown')
+        let band = '65+'
+        if (age<=4) band='0-4'
+        else if (age<=14) band='5-14'
+        else if (age<=24) band='15-24'
+        else if (age<=34) band='25-34'
+        else if (age<=44) band='35-44'
+        else if (age<=54) band='45-54'
+        else if (age<=64) band='55-64'
+        acc[band][sex] += 1
+        acc[band].Total += 1
+      }
+      return DEFAULT_BANDS.map(b=>({age_band:b, ...acc[b]}))
     }
-    return BANDS.map(b=>rows[b.label]);
-  },[labs]);
 
-  const maxTotal = Math.max(1, ...table.map(r=>r.Total||0));
+    // If raw itself is an array of rows
+    if (Array.isArray(raw)) return raw
+
+    return []
+  },[raw])
+
+  if (loading) return <div className="card">Loading…</div>
+  if (err) return <div className="card error">Error: {err}</div>
+  if (!isArr(rows)) return <div className="card">No data</div>
 
   return (
     <section>
       <h2 className="section-title">Sex & Age</h2>
-      {err && <div className="error">{err}</div>}
-      <div className="card">
-        <table className="table small">
-          <thead><tr><th>Age band</th><th>Male</th><th>Female</th><th>Unknown</th><th>Total</th></tr></thead>
+      <div className="card" style={{overflowX:'auto'}}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Age band</th>
+              {SEX_COLS.map(s=> <th key={s}>{s}</th>)}
+              <th>Total</th>
+            </tr>
+          </thead>
           <tbody>
-            {table.map(r=>{
-              const w = Math.round((Number(r.Total||0)/maxTotal)*100);
-              return (
-                <tr key={r.band}>
-                  <td style={{whiteSpace:'nowrap'}}>{r.band}</td>
-                  <td>{r.M}</td>
-                  <td>{r.F}</td>
-                  <td>{r.U}</td>
-                  <td style={{minWidth:130}}>
-                    <div className="small" style={{display:'flex', gap:8, alignItems:'center'}}>
-                      <span>{r.Total}</span>
-                      <div style={{flex:1, height:8, background:'#eee', borderRadius:6}}>
-                        <div style={{height:'100%', width:`${w}%`, borderRadius:6}} />
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map((r,i)=>(
+              <tr key={i}>
+                <td>{r.age_band || r.band || r.ageBand || '-'}</td>
+                {SEX_COLS.map(s => <td key={s}>{Number(r[s])||0}</td>)}
+                <td>{Number(r.Total)|| (SEX_COLS.reduce((a,s)=>a+(Number(r[s])||0),0))}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        {table.every(r=>r.Total===0) && <div className="small" style={{marginTop:8}}>No records yet.</div>}
       </div>
     </section>
-  );
+  )
 }
