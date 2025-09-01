@@ -129,3 +129,44 @@ CORS_ALLOW_HEADERS = [
 CSRF_TRUSTED_ORIGINS = [
     'https://stirring-alpaca-e31b52.netlify.app',
 ]
+
+# === CORS (browser) ===
+# Requires: pip install django-cors-headers
+try:
+    INSTALLED_APPS
+except NameError:
+    INSTALLED_APPS = []
+if 'corsheaders' not in INSTALLED_APPS:
+    INSTALLED_APPS += ['corsheaders']
+
+try:
+    MIDDLEWARE
+except NameError:
+    MIDDLEWARE = []
+if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
+    MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + list(MIDDLEWARE)
+
+# Allow your Netlify site and local dev
+CORS_ALLOWED_ORIGINS = list(set([
+    'https://stirring-alpaca-e31b52.netlify.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+]))
+
+# Allow Authorization header so Token auth works
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(set(list(default_headers) + [
+    'authorization',
+    'content-type',
+    'accept',
+    'origin',
+]))
+
+# Hosts that can serve Django (Render + local)
+try:
+    ALLOWED_HOSTS
+except NameError:
+    ALLOWED_HOSTS = []
+for h in ['127.0.0.1', 'localhost', 'amr-app.onrender.com', 'stirring-alpaca-e31b52.netlify.app']:
+    if h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(h)
