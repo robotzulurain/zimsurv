@@ -28,7 +28,7 @@ class SimpleCORSMiddleware:
         response["Access-Control-Allow-Origin"] = origin or "*"
         response["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, X-Requested-With"
-        # If you ever need cookies, also set:
+        # Uncomment if you ever need cookies:
         # response["Access-Control-Allow-Credentials"] = "true"
         if origin:
             existing_vary = response.get("Vary", "")
