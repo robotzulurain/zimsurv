@@ -2,9 +2,8 @@ from django.http import HttpResponse
 
 class SimpleCORSMiddleware:
     """
-    Minimal CORS: adds ACAO/ACAH/ACAM on every response.
-    Also handles OPTIONS preflight directly.
-    Safe: never raises; works even if other settings are off.
+    Adds CORS headers to every response and handles OPTIONS preflight.
+    Safe and dependency-free.
     """
     def __init__(self, get_response):
         self.get_response = get_response
@@ -12,7 +11,7 @@ class SimpleCORSMiddleware:
     def __call__(self, request):
         origin = request.headers.get("Origin")
 
-        # Preflight short-circuit
+        # Handle preflight quickly
         if request.method == "OPTIONS":
             resp = HttpResponse()
             resp["Access-Control-Allow-Origin"] = origin or "*"
@@ -23,12 +22,11 @@ class SimpleCORSMiddleware:
                 resp["Vary"] = "Origin"
             return resp
 
-        # Normal request -> call the view, then add CORS headers
+        # Normal request
         response = self.get_response(request)
         response["Access-Control-Allow-Origin"] = origin or "*"
         response["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, X-Requested-With"
-        # response["Access-Control-Allow-Credentials"] = "true"  # if you ever need cookies
         if origin:
             existing_vary = response.get("Vary", "")
             if "Origin" not in existing_vary:

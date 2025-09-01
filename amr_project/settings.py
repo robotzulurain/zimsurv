@@ -3,10 +3,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# --- Core ---
 SECRET_KEY = os.getenv("SECRET_KEY", "demo-secret")
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-# Hosts that can serve Django (Render + Netlify + local)
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
@@ -15,7 +15,6 @@ ALLOWED_HOSTS = [
 ]
 
 INSTALLED_APPS = [
-    # Django essentials
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -23,15 +22,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party
     "rest_framework",
     "rest_framework.authtoken",
 
-    # Your app
     "amr_reports",
 ]
 
-# Simple, robust CORS middleware you added
 MIDDLEWARE = [
     "amr_project.mw_cors_simple.SimpleCORSMiddleware",  # must be first
     "django.middleware.security.SecurityMiddleware",
@@ -63,7 +59,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "amr_project.wsgi.application"
 
-# Database — SQLite by default
+# --- DB (SQLite by default) ---
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -71,7 +67,7 @@ DATABASES = {
     }
 }
 
-# Password validation
+# --- Password validators ---
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -79,20 +75,22 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# --- i18n ---
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
+# --- Static ---
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Trust proxy headers (needed on Render)
+# Behind proxy (Render)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# DRF (clean, minimal)
+# --- DRF ---
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
