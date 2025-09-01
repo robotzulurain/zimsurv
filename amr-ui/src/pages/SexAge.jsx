@@ -1,75 +1,101 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../api'
-import { isArr } from '../util/isArray'
 
-const BANDS = ['0-4','5-14','15-24','25-34','35-44','45-54','55-64','65+']
-const SEX_COLS = ['Male','Female','Unknown']
-
-function bandForAge(age){
-  const a = Number.isFinite(age)? age : 0
-  if (a<=4) return '0-4'
-  if (a<=14) return '5-14'
-  if (a<=24) return '15-24'
-  if (a<=34) return '25-34'
-  if (a<=44) return '35-44'
-  if (a<=54) return '45-54'
-  if (a<=64) return '55-64'
-  return '65+'
+const OPTS = {
+  host: ['', 'human','animal','environment'],
+  organism: ['', 'E. coli','Klebsiella','S. aureus','Pseudomonas','Enterococcus'],
+  antibiotic: ['', 'Ciprofloxacin','Ceftriaxone','Gentamicin','Ampicillin','Meropenem']
 }
 
 export default function SexAge(){
+  const [host,setHost]=useState('')
+  const [org,setOrg]=useState('')
+  const [abx,setAbx]=useState('')
+
+  const qs = useMemo(()=>{
+    const p = new URLSearchParams()
+    if(host) p.set('host',host)
+    if(org) p.set('organism',org)
+    if(abx) p.set('antibiotic',abx)
+    const s = p.toString()
+    return s? ('?'+s):''
+  },[host,org,abx])
+
   const [rows,setRows]=useState(null)
-  const [loading,setLoading]=useState(true)
   const [err,setErr]=useState(null)
 
   useEffect(()=>{
-    let on=true
-    setLoading(true)
-    apiFetch('/api/lab-results/')
-      .then(d=>{
-        if(!on) return
-        const arr = Array.isArray(d) ? d : (d.results||[])
-        const acc = Object.fromEntries(BANDS.map(b=>[b,{Male:0,Female:0,Unknown:0,Total:0}]))
-        for(const r of arr){
-          const sex = (r.sex||'').toUpperCase()==='F' ? 'Female' : ((r.sex||'').toUpperCase()==='M' ? 'Male' : 'Unknown')
-          const band = bandForAge(Number(r.age))
-          acc[band][sex] += 1
-          acc[band].Total += 1
-        }
-        setRows(BANDS.map(b=>({age_band:b, ...acc[b]})))
-      })
-      .catch(e=> on && setErr(String(e)))
-      .finally(()=> on && setLoading(false))
-    return ()=>{ on=false }
-  },[])
-
-  if (loading) return <div className="card">Loading…</div>
-  if (err) return <div className="card error">Error: {err}</div>
-  if (!isArr(rows)) return <div className="card">No data</div>
+    setRows(null); setErr(null)
+    apiFetch(`/api/summary/sex-age/${qs}`).then(setRows).catch(e=>setErr(String(e)))
+  },[qs])
 
   return (
-    <section>
-      <h2 className="section-title">Sex & Age</h2>
-      <div className="card" style={{overflowX:'auto'}}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Age band</th>
-              {SEX_COLS.map(s=> <th key={s}>{s}</th>)}
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r,i)=>(
-              <tr key={i}>
-                <td>{r.age_band}</td>
-                {SEX_COLS.map(s=> <td key={s}>{Number(r[s])||0}</td>)}
-                <td>{Number(r.Total)||0}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <section className="column" style={{gap:12}}>
+      <div className="row" style={{justifyContent:'space-between',alignItems:'center'}}>
+        <h2 className="section-title">Sex & Age</h2>
+        <div className="row" style={{gap:8}}>
+          <Select label="Host" value={host} onChange={setHost} opts={OPTS.host} />
+          <Select label="Organism" value={org} onChange={setOrg} opts={OPTS.organism} />
+          <Select label="Antibiotic" value={abx} onChange={setAbx} opts={OPTS.antibiotic} />
+        </div>
       </div>
+
+      {err && <div className="error">Error: {err}</div>}
+      {!rows && !err && <div className="muted">Loading…</div>}
+      {rows && rows.length===0 && <div className="muted">No data</div>}
+
+      {rows && rows.length>0 && (
+        <div className="card">
+          <table className="table">
+            <thead>
+              <tr><th>Age band</th><th>Male</th><th>Female</th><th>Unknown</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+              {rows.map(r=>(
+                <tr key={r.band}>
+                  <td>{r.band}</td>
+                  <td>{r.M}</td>
+                  <td>{r.F}</td>
+                  <td>{r.U}</td>
+                  <td>{r.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="small muted" style={{marginTop:8}}>Stacked (M/F/U)</div>
+          <div className="column" style={{gap:8}}>
+            {rows.map(r=>{
+              const total = r.total || 1
+              const wM = (r.M/total)*100
+              const wF = (r.F/total)*100
+              const wU = (r.U/total)*100
+              return (
+                <div key={r.band} className="row" style={{alignItems:'center',gap:8}}>
+                  <div style={{width:56}} className="small">{r.band}</div>
+                  <div style={{flex:1, height:16, display:'flex', borderRadius:6, overflow:'hidden', background:'#f3f4f6'}}>
+                    <div title={`M ${r.M}`} style={{width:`${wM}%`, background:'#2563eb'}} />
+                    <div title={`F ${r.F}`} style={{width:`${wF}%`, background:'#22c55e'}} />
+                    <div title={`U ${r.U}`} style={{width:`${wU}%`, background:'#9ca3af'}} />
+                  </div>
+                  <div style={{width:40}} className="small">{r.total}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </section>
+  )
+}
+
+function Select({label,value,onChange,opts}){
+  return (
+    <label className="small" style={{display:'flex',alignItems:'center',gap:6}}>
+      <span>{label}</span>
+      <select value={value} onChange={e=>onChange(e.target.value)}>
+        {opts.map((o,i)=><option key={i} value={o}>{o||'All'}</option>)}
+      </select>
+    </label>
   )
 }

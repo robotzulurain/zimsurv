@@ -1,106 +1,84 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../api'
-import { isArr } from '../util/isArray'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid
-} from 'recharts'
 
-function monthKey(dstr){
-  // expects "YYYY-MM-DD" or "YYYY-MM" -> returns "YYYY-MM"
-  if (!dstr) return 'Unknown'
-  const s = String(dstr)
-  return s.length>=7 ? s.slice(0,7) : s
-}
-
-function aggregate(rows, dim){
-  // dim: 'organism' | 'antibiotic' | 'host_type'
-  const byMonth = new Map()
-  for(const r of rows){
-    const m = monthKey(r.test_date || r.date)
-    const key = (r[dim] || r[dim.replace('_type','')] || 'Unknown')
-    if (!byMonth.has(m)) byMonth.set(m, {})
-    const obj = byMonth.get(m)
-    obj[key] = (obj[key] || 0) + 1
-  }
-  // pick top 5 keys globally
-  const counts = {}
-  for(const obj of byMonth.values()){
-    for(const [k,v] of Object.entries(obj)){
-      counts[k] = (counts[k] || 0) + v
-    }
-  }
-  const topKeys = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k)
-  // build recharts data array
-  const months = [...byMonth.keys()].sort()
-  return months.map(m=>{
-    const obj = byMonth.get(m)
-    const row = { month: m }
-    for(const k of topKeys) row[k] = obj[k] || 0
-    return row
-  })
+const OPTS = {
+  host: ['', 'human','animal','environment'],
+  organism: ['', 'E. coli','Klebsiella','S. aureus','Pseudomonas','Enterococcus'],
+  antibiotic: ['', 'Ciprofloxacin','Ceftriaxone','Gentamicin','Ampicillin','Meropenem']
 }
 
 export default function Trends(){
-  const [dim,setDim] = useState('organism') // 'organism' | 'antibiotic' | 'host_type'
-  const [raw,setRaw]=useState(null)
-  const [loading,setLoading]=useState(true)
+  const [host,setHost]=useState('')
+  const [org,setOrg]=useState('')
+  const [abx,setAbx]=useState('')
+  const [data,setData]=useState(null)
   const [err,setErr]=useState(null)
+  const qs = useMemo(()=>{
+    const p = new URLSearchParams()
+    if(host) p.set('host',host)
+    if(org) p.set('organism',org)
+    if(abx) p.set('antibiotic',abx)
+    const s = p.toString()
+    return s? ('?'+s):''
+  },[host,org,abx])
 
   useEffect(()=>{
-    let on=true
-    setLoading(true)
-    // always pull lab-results to compute monthly series locally
-    apiFetch('/api/lab-results/')
-      .then(d=>{ if(on) setRaw(Array.isArray(d)?d:(d.results||[])) })
-      .catch(e=>{ if(on) setErr(String(e)) })
-      .finally(()=> on && setLoading(false))
-    return ()=>{ on=false }
-  },[])
-
-  const data = useMemo(()=>{
-    if (!isArr(raw)) return []
-    return aggregate(raw, dim)
-  },[raw, dim])
-
-  const categories = useMemo(()=>{
-    if (!isArr(data)) return []
-    const keys = new Set()
-    data.forEach(row=>{
-      Object.keys(row).forEach(k=>{ if(k!=='month') keys.add(k) })
-    })
-    return [...keys]
-  },[data])
-
-  if (loading) return <div className="card">Loading…</div>
-  if (err) return <div className="card error">Error: {err}</div>
-  if (!isArr(data) || data.length===0) return <div className="card">No data</div>
+    setData(null); setErr(null)
+    apiFetch(`/api/summary/resistance-time-trend/${qs}`)
+      .then(setData)
+      .catch(e=>setErr(String(e)))
+  },[qs])
 
   return (
-    <section>
-      <h2 className="section-title">Trends</h2>
-      <div className="card" style={{display:'flex',gap:8,alignItems:'center'}}>
-        <span className="small">Dimension:</span>
-        <select value={dim} onChange={e=>setDim(e.target.value)}>
-          <option value="organism">Organism</option>
-          <option value="antibiotic">Antibiotic</option>
-          <option value="host_type">Host</option>
-        </select>
+    <section className="card">
+      <div className="row" style={{justifyContent:'space-between',alignItems:'center',gap:12}}>
+        <h2 className="section-title">Resistance trends</h2>
+        <div className="row" style={{gap:8}}>
+          <Select label="Host" value={host} onChange={setHost} opts={OPTS.host} />
+          <Select label="Organism" value={org} onChange={setOrg} opts={OPTS.organism} />
+          <Select label="Antibiotic" value={abx} onChange={setAbx} opts={OPTS.antibiotic} />
+        </div>
       </div>
 
-      <div className="card" style={{height:380}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{top:10,right:20,left:0,bottom:10}}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Legend />
-            {categories.map((k,i)=>(
-              <Bar key={k} dataKey={k} stackId={undefined} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      {err && <div className="error">Error: {err}</div>}
+      {!data && !err && <div className="muted">Loading…</div>}
+      {data && data.length===0 && <div className="muted">No data</div>}
+
+      {data && data.length>0 && (
+        <div className="card" style={{padding:'12px 16px'}}>
+          <div className="small muted" style={{marginBottom:6}}>Monthly % Resistant (R)</div>
+          <BarChart rows={data} />
+        </div>
+      )}
     </section>
+  )
+}
+
+function Select({label,value,onChange,opts}){
+  return (
+    <label className="small" style={{display:'flex',alignItems:'center',gap:6}}>
+      <span>{label}</span>
+      <select value={value} onChange={e=>onChange(e.target.value)}>
+        {opts.map((o,i)=><option key={i} value={o}>{o||'All'}</option>)}
+      </select>
+    </label>
+  )
+}
+
+function BarChart({rows}){
+  // simple inline bars based on percent_R
+  const max = 100
+  return (
+    <div className="column" style={{gap:6}}>
+      {rows.map(r=>(
+        <div key={r.month} className="row" style={{alignItems:'center',gap:8}}>
+          <div style={{width:80}} className="small">{r.month}</div>
+          <div style={{flex:1,background:'#f3f4f6',borderRadius:6,overflow:'hidden',height:16}}>
+            <div style={{width:`${Math.min(r.percent_R,max)}%`,height:'100%',background:'#2563eb'}} />
+          </div>
+          <div style={{width:56}} className="small">{Math.round(r.percent_R)}%</div>
+        </div>
+      ))}
+    </div>
   )
 }
