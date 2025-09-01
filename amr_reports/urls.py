@@ -17,3 +17,8 @@ urlpatterns = [
     path('api/data-entry/', DataEntryCreate.as_view(), name='data-entry'),
     path('api/data-entry/bulk/', DataEntryBulk.as_view(), name='data-entry-bulk'),
 ]
+from . import views_filters
+
+urlpatterns += [
+    path("api/filters/", views_filters.filter_options, name="filters"),
+]
