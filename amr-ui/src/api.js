@@ -1,38 +1,42 @@
-const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'')
-const TOKEN = import.meta.env.VITE_API_TOKEN || ''
+const BASE = import.meta.env.VITE_API_BASE || 'https://amr-app.onrender.com';
+const TOKEN = import.meta.env.VITE_API_TOKEN || '';
 
-function buildUrl(path) {
-  if (!BASE) throw new Error('VITE_API_BASE is not set (check Netlify env vars).')
-  const p = path.startsWith('/') ? path : `/${path}`
-  return `${BASE}${p}`
-}
-
-export async function apiFetch(path, options = {}) {
-  const url = buildUrl(path)
-  const headers = new Headers(options.headers || {})
-  headers.set('Accept', 'application/json')
-  if (TOKEN) headers.set('Authorization', `Token ${TOKEN}`)
-
-  let body = options.body
-  if (body && typeof body === 'object' && !(body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json')
-    body = JSON.stringify(body)
+export async function apiFetch(path, opts = {}) {
+  const url = path.startsWith('http') ? path : `${BASE}${path}`;
+  const headers = new Headers(opts.headers || {});
+  if (TOKEN && !headers.has('Authorization')) {
+    headers.set('Authorization', `Token ${TOKEN}`);
   }
+  if (!headers.has('Accept')) headers.set('Accept','application/json');
 
-  const resp = await fetch(url, { method: options.method || 'GET', headers, body })
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(()=>'')
-    throw new Error(`HTTP ${resp.status} - ${text}`)
+  const res = await fetch(url, { ...opts, headers });
+  if (!res.ok) {
+    const txt = await res.text().catch(()=>res.statusText);
+    throw new Error(`HTTP ${res.status} - ${txt}`);
   }
-
-  const ct = resp.headers.get('content-type') || ''
-  return ct.includes('application/json') ? resp.json() : resp.text()
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('application/json') ? res.json() : res.text();
 }
 
-export const api = {
-  get: (p) => apiFetch(p),
-  post: (p, b) => apiFetch(p, { method: 'POST', body: b }),
+/** Service registry — pages can call sr.counts(), sr.trend({...}), etc. */
+export const sr = {
+  counts     : () => apiFetch('/api/summary/counts-summary/'),
+  trend      : (q={}) => apiFetch('/api/summary/resistance-time-trend/?'+toQS(q)),
+  antibiogram: (q={}) => apiFetch('/api/summary/antibiogram/?'+toQS(q)),
+  dataQuality: () => apiFetch('/api/summary/data-quality/'),
+  facilities : () => apiFetch('/api/summary/facilities-geo/'),
+  sexAge     : (q={}) => apiFetch('/api/summary/sex-age/?'+toQS(q)),
+  labResults : (q={}) => apiFetch('/api/lab-results/?'+toQS(q)),
+};
+
+function toQS(obj){
+  const p = new URLSearchParams();
+  Object.entries(obj).forEach(([k,v])=>{
+    if (v && v !== 'All') p.append(k, v);
+  });
+  return p.toString();
 }
 
-export default api
+/* Default export for code that does: import api from '../api' */
+const api = { apiFetch, sr };
+export default api;

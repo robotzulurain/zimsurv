@@ -1,142 +1,117 @@
-import React, { useMemo, useState } from "react";
-import { api } from "../api";
+import React, { useState } from 'react'
+import api, { apiFetch } from '../api'
 
 const SUGGEST = {
-  sex: ["M","F"],
-  specimen: ["urine","blood","stool","csf","sputum"],
-  organism: ["E. coli","Klebsiella","S. aureus","Pseudomonas","Enterococcus"],
-  antibiotic: ["Ciprofloxacin","Ceftriaxone","Gentamicin","Ampicillin","Meropenem"],
-  ast: ["S","I","R"],
-  host: ["human","animal","environment"],
-};
-
-function SmartInput({label, name, value, onChange, list=[], placeholder, type='text'}) {
-  const [mode,setMode] = useState(list.length ? "pick" : "type");
-  return (
-    <label className="card" style={{gap:6}}>
-      <div className="small" style={{display:"flex",justifyContent:"space-between"}}>
-        <span>{label}</span>
-        {list.length>0 && (
-          <span className="small">
-            <button type="button" className="subtab" onClick={()=>setMode("pick")} disabled={mode==="pick"}>Pick</button>
-            <button type="button" className="subtab" onClick={()=>setMode("type")} disabled={mode==="type"}>Type</button>
-          </span>
-        )}
-      </div>
-      {mode==="pick" && (
-        <select value={value} onChange={e=>onChange(name, e.target.value)}>
-          <option value="">— select —</option>
-          {list.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
-      )}
-      {mode==="type" && (
-        <input type={type} value={value} placeholder={placeholder}
-               onChange={e=>onChange(name, e.target.value)} />
-      )}
-    </label>
-  );
+  sex: ['M','F','U'],
+  specimen: ['urine','blood','stool','csf','sputum','water'],
+  organism: ['E. coli','Klebsiella','S. aureus','Pseudomonas','Enterococcus'],
+  antibiotic: ['Ciprofloxacin','Ceftriaxone','Gentamicin','Ampicillin','Meropenem','Amoxicillin'],
+  ast: ['S','I','R'],
+  host: ['human','animal','environment'],
 }
 
 export default function DataEntry(){
-  const [form,setForm] = useState({
-    date: "", patient_id: "", sex: "", age: "",
-    specimen: "", organism: "", antibiotic: "",
-    ast: "", host: "", facility: ""
-  });
-  const [busy,setBusy] = useState(false);
-  const [msg,setMsg] = useState("");
+  const [form,setForm]=useState({
+    date:'', patient_id:'', sex:'', age:'', specimen:'', organism:'',
+    antibiotic:'', ast:'', host:'human', facility:''
+  })
+  const [msg,setMsg]=useState(null)
 
-  const canSubmit = useMemo(()=>{
-    return form.date && form.patient_id && form.sex && form.specimen &&
-           form.organism && form.antibiotic && form.ast && form.host && form.facility;
-  }, [form]);
+  const onChange = (k,v)=> setForm(f=>({...f,[k]:v}))
 
-  function onChange(name,val){ setForm(f=>({ ...f, [name]: val })); }
+  // helper to POST JSON using apiFetch
+  const postJSON = (url, body) =>
+    apiFetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    })
 
-  async function onSubmit(e){
-    e.preventDefault();
-    if (!canSubmit || busy) return;
-    setBusy(true); setMsg("");
-    const payload = { ...form };
-    // age: send only if valid; empty -> drop
-    if (payload.age === "" || payload.age === null || Number.isNaN(Number(payload.age))) {
-      delete payload.age;
-    } else {
-      payload.age = Number(payload.age);
-    }
+  const send = async ()=>{
+    setMsg('Submitting…')
+    const payload = {...form}
+    if (payload.age==='' || payload.age==null || Number.isNaN(Number(payload.age))) delete payload.age
+    else payload.age = Number(payload.age)
     try{
-      const res = await api.createOne(payload);
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`HTTP ${res.status} - ${txt}`);
-      }
-      setMsg("Saved ✔");
-      setForm(f=>({ ...f, patient_id:"", facility:"" })); // keep other fields for speed
-    }catch(err){
-      setMsg(`Submit failed: ${String(err.message || err)}`);
-    }finally{
-      setBusy(false);
-    }
+      const r = await postJSON('/api/data-entry/', payload)
+      setMsg(`Saved #${r.id}`)
+    }catch(e){ setMsg('Submit failed: '+String(e)) }
   }
 
-  // CSV bulk upload (very basic CSV: header names match form keys or aliases)
-  async function onCsv(e){
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if (lines.length < 2) { setMsg("CSV has no data rows"); return; }
-    const headers = lines[0].split(",").map(h=>h.trim());
-    const rows = lines.slice(1).map(line=>{
-      const cols = line.split(","); const row = {};
-      headers.forEach((h,i)=>row[h]=cols[i]?.trim() ?? "");
-      // age cleanup
-      if (row.age === "" || row.age == null || Number.isNaN(Number(row.age))) delete row.age;
-      else row.age = Number(row.age);
-      return row;
-    });
-
-    setBusy(true); setMsg("");
+  const onCSV = async (file)=>{
+    setMsg('Parsing CSV…')
+    const text = await file.text()
+    const lines = text.split(/\r?\n/).filter(Boolean)
+    if (!lines.length) return setMsg('CSV is empty')
+    const headers = lines[0].split(',').map(h=>h.trim())
+    const rows = lines.slice(1).map(l=>{
+      const cols = l.split(',')
+      const obj = {}; headers.forEach((h,i)=>obj[h]=cols[i])
+      if (obj.age==='' || obj.age==null || Number.isNaN(Number(obj.age))) delete obj.age
+      else obj.age = Number(obj.age)
+      return obj
+    })
     try{
-      const res = await api.createBulk(rows);
-      const body = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status} - ${body}`);
-      setMsg(`Bulk result: ${body}`);
-    }catch(err){
-      setMsg(`Bulk failed: ${String(err.message || err)}`);
-    }finally{
-      setBusy(false);
-    }
+      const res = await postJSON('/api/data-entry/bulk/', {rows})
+      setMsg(`Bulk created: ${res.created_count}, errors: ${res.errors_count}`)
+    }catch(e){ setMsg('Bulk failed: '+String(e)) }
   }
+
+  const Text = ({label,k,placeholder=''})=>(
+    <label className="input"><span className="small">{label}</span>
+      <input
+        value={form[k]||''}
+        onChange={e=>onChange(k,e.target.value)}
+        placeholder={placeholder}
+        style={{color:'var(--text, #111)'}}
+      />
+    </label>
+  )
+  const Pick = ({label,k,opts})=>(
+    <label className="input"><span className="small">{label}</span>
+      <select
+        value={form[k]||''}
+        onChange={e=>onChange(k,e.target.value)}
+        style={{color:'var(--text, #111)'}}
+      >
+        <option value="">—</option>
+        {opts.map(o=><option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
+  )
 
   return (
-    <section className="card">
-      <h2 className="section-title">Data Entry</h2>
-
-      <form onSubmit={onSubmit} className="grid">
-        <SmartInput label="Date" name="date" value={form.date} onChange={onChange} type="date" />
-        <SmartInput label="Patient ID" name="patient_id" value={form.patient_id} onChange={onChange} />
-        <SmartInput label="Sex" name="sex" value={form.sex} onChange={onChange} list={SUGGEST.sex} />
-        <SmartInput label="Age (years)" name="age" value={form.age} onChange={onChange} type="number" />
-        <SmartInput label="Specimen" name="specimen" value={form.specimen} onChange={onChange} list={SUGGEST.specimen} />
-        <SmartInput label="Organism" name="organism" value={form.organism} onChange={onChange} list={SUGGEST.organism} />
-        <SmartInput label="Antibiotic" name="antibiotic" value={form.antibiotic} onChange={onChange} list={SUGGEST.antibiotic} />
-        <SmartInput label="AST (S/I/R)" name="ast" value={form.ast} onChange={onChange} list={SUGGEST.ast} />
-        <SmartInput label="Host" name="host" value={form.host} onChange={onChange} list={SUGGEST.host} />
-        <SmartInput label="Facility" name="facility" value={form.facility} onChange={onChange} />
-
-        <div>
-          <button className="button" type="submit" disabled={!canSubmit || busy}>
-            {busy ? "Saving..." : "Submit"}
-          </button>
-          <span className="small" style={{marginLeft:12}}>{msg}</span>
+    <div className="grid" style={{gridTemplateColumns:'1.2fr .8fr'}}>
+      <div className="card">
+        <h3>Single record</h3>
+        <div className="row">
+          <Text label="Date (YYYY-MM-DD)" k="date" placeholder="2025-08-31"/>
+          <Text label="Patient ID" k="patient_id"/>
+          <Pick label="Sex" k="sex" opts={SUGGEST.sex}/>
+          <Text label="Age" k="age" placeholder="(optional)"/>
+          <Pick label="Specimen" k="specimen" opts={SUGGEST.specimen}/>
+          <Pick label="Organism" k="organism" opts={SUGGEST.organism}/>
+          <Pick label="Antibiotic" k="antibiotic" opts={SUGGEST.antibiotic}/>
+          <Pick label="AST (S/I/R)" k="ast" opts={SUGGEST.ast}/>
+          <Pick label="Host" k="host" opts={SUGGEST.host}/>
+          <Text label="Facility" k="facility" />
         </div>
-      </form>
-
-      <div className="card" style={{marginTop:16}}>
-        <div className="small">CSV upload (headers like: date,patient_id,sex,age,specimen,organism,antibiotic,ast,host,facility)</div>
-        <input type="file" accept=".csv,text/csv" onChange={onCsv} />
+        <div className="row" style={{marginTop:12, gap:12}}>
+          <button className="btn primary" onClick={send}>Submit</button>
+          <span className="small">{msg}</span>
+        </div>
       </div>
-    </section>
-  );
+
+      <div className="card">
+        <h3>CSV upload</h3>
+        <div className="small">
+          Columns accepted: date/test_date, patient_id, sex, age, specimen/specimen_type,
+          organism, antibiotic, ast/ast_result, host/host_type, facility
+        </div>
+        <div className="row" style={{marginTop:12}}>
+          <input type="file" accept=".csv,text/csv" onChange={e=> e.target.files?.[0] && onCSV(e.target.files[0]) }/>
+        </div>
+      </div>
+    </div>
+  )
 }

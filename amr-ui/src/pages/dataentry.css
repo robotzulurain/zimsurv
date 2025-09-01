@@ -1,0 +1,13 @@
+.input { display:flex; flex-direction:column; gap:6px; min-width: 160px; }
+.input input, .input select {
+  padding: 8px 10px;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+}
+.input input:focus, .input select:focus {
+  border-color: var(--accent, #1976d2);
+  box-shadow: 0 0 0 3px rgba(25,118,210,0.12);
+}
+.row { display:flex; flex-wrap:wrap; gap:12px; }

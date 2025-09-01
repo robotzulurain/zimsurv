@@ -1,118 +1,110 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { apiFetch } from '../api'
+import React, { useMemo, useState } from 'react'
+import useLabData from '../hooks/useLabData'
+import Tabs from '../components/Tabs'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
 
-const HOSTS = ['', 'human','animal','environment']
+const Select = ({label, value, onChange, options=[]}) => (
+  <label className="small" style={{display:'flex',flexDirection:'column',gap:4}}>
+    {label}
+    <select value={value} onChange={e=>onChange(e.target.value)}>
+      <option>All</option>
+      {options.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
+  </label>
+)
+
+function HeatCell({pct}) {
+  const p = Number(pct) || 0
+  // green = 0%R, red = 100%R; simple red gradient
+  const color = `hsl(${Math.round(120 - 1.2*p)},70%,60%)` // 120->green to 0->red
+  return (
+    <div style={{
+      textAlign:'center',
+      padding:'8px 6px',
+      background: color,
+      color: '#000',
+      borderRadius: 6,
+      fontWeight:600
+    }}>
+      {p.toFixed(0)}%
+    </div>
+  )
+}
 
 export default function Resistance(){
-  const [host,setHost]=useState('')
-  const [rows,setRows]=useState(null)
-  const [err,setErr]=useState(null)
+  const { rows, options, filterData, aggMonthly, aggHeatmap, loading, error } = useLabData()
+  const [tab, setTab] = useState('Heatmap')
+  const [f, setF] = useState({ host:'All', organism:'All', antibiotic:'All', city:'All', facility:'All' })
+  const onF = (k,v)=> setF(s=>({...s,[k]:v}))
 
-  useEffect(()=>{
-    setRows(null); setErr(null)
-    const qs = host? `?host=${encodeURIComponent(host)}` : ''
-    apiFetch(`/api/summary/antibiogram/${qs}`).then(setRows).catch(e=>setErr(String(e)))
-  },[host])
+  const filtered = useMemo(()=>filterData(f), [rows, f, filterData])
 
-  const groups = useMemo(()=>{
-    if(!rows) return {}
-    const g = {}
-    rows.forEach(r=>{
-      if(!g[r.organism]) g[r.organism]=[]
-      g[r.organism].push(r)
-    })
-    return g
-  },[rows])
+  // Compare (monthly bars)
+  const monthly = useMemo(()=>aggMonthly(filtered), [filtered, aggMonthly])
 
-  const antibiotics = useMemo(()=>{
-    if(!rows) return []
-    const set = new Set(rows.map(r=>r.antibiotic))
-    return Array.from(set)
-  },[rows])
+  // Heatmap (organism x antibiotic => %R)
+  const hm = useMemo(()=>aggHeatmap(filtered), [filtered, aggHeatmap])
 
   return (
-    <section className="column" style={{gap:12}}>
-      <div className="row" style={{justifyContent:'space-between',alignItems:'center'}}>
-        <h2 className="section-title">Resistance</h2>
-        <label className="small" style={{display:'flex',alignItems:'center',gap:6}}>
-          <span>Host</span>
-          <select value={host} onChange={e=>setHost(e.target.value)}>
-            {HOSTS.map((h,i)=><option key={i} value={h}>{h||'All'}</option>)}
-          </select>
-        </label>
+    <div className="card">
+      <h3>Resistance</h3>
+      <div className="row" style={{gap:12, marginBottom:12}}>
+        <Select label="Host" value={f.host} onChange={v=>onF('host',v)} options={options.host}/>
+        <Select label="Organism" value={f.organism} onChange={v=>onF('organism',v)} options={options.organism}/>
+        <Select label="Antibiotic" value={f.antibiotic} onChange={v=>onF('antibiotic',v)} options={options.antibiotic}/>
+        <Select label="City" value={f.city} onChange={v=>onF('city',v)} options={options.city}/>
+        <Select label="Facility" value={f.facility} onChange={v=>onF('facility',v)} options={options.facility}/>
       </div>
 
-      {err && <div className="error">Error: {err}</div>}
-      {!rows && !err && <div className="muted">Loading…</div>}
-      {rows && rows.length===0 && <div className="muted">No data</div>}
+      <Tabs tabs={['Heatmap','Compare']} active={tab} onChange={setTab} />
 
-      {rows && rows.length>0 && (
-        <>
-          {/* Compare table */}
-          <div className="card">
-            <h3 className="small muted" style={{marginBottom:8}}>Compare (Top %R)</h3>
-            <table className="table">
+      {loading && <div>Loading…</div>}
+      {error && <div className="small" style={{color:'var(--bad)'}}>Error: {error}</div>}
+
+      {!loading && tab==='Compare' && (
+        monthly.length ? (
+          <div style={{width:'100%', height:420}}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthly}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="resistant" name="Resistant" fill="#d32f2f" />
+                <Bar dataKey="total" name="Total" fill="#1976d2" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : <div>No data</div>
+      )}
+
+      {!loading && tab==='Heatmap' && (
+        hm.matrix && hm.matrix.length ? (
+          <div style={{overflowX:'auto'}}>
+            <table style={{borderCollapse:'separate', borderSpacing:8, width:'100%'}}>
               <thead>
-                <tr><th>Organism</th><th>Antibiotic</th><th>Total</th><th>Resistant</th><th>%R</th></tr>
+                <tr>
+                  <th style={{textAlign:'left'}}>Organism \\ Antibiotic</th>
+                  {hm.antibiotics.map(a=> <th key={a} style={{textAlign:'center'}}>{a}</th>)}
+                </tr>
               </thead>
               <tbody>
-                {rows
-                  .slice()
-                  .sort((a,b)=>b.percent_R-a.percent_R)
-                  .slice(0,10)
-                  .map((r,idx)=>(
-                    <tr key={idx}>
-                      <td>{r.organism}</td>
-                      <td>{r.antibiotic}</td>
-                      <td>{r.total}</td>
-                      <td>{r.resistant}</td>
-                      <td>{Math.round(r.percent_R)}%</td>
-                    </tr>
+                {hm.organisms.map((o, i) => (
+                  <tr key={o}>
+                    <td style={{fontWeight:600}}>{o}</td>
+                    {hm.matrix[i].map(cell => (
+                      <td key={cell.a}>
+                        <HeatCell pct={cell.percent_R} />
+                      </td>
+                    ))}
+                  </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          {/* Heatmap-ish grid */}
-          <div className="card">
-            <h3 className="small muted" style={{marginBottom:8}}>Heatmap (%R)</h3>
-            <div className="small muted" style={{marginBottom:6}}>darker = higher %R</div>
-            <div className="overflow-x">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Organism \\ Antibiotic</th>
-                    {antibiotics.map(a=><th key={a}>{a}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(groups).map(([org, list])=>{
-                    const byAbx = Object.fromEntries(list.map(r=>[r.antibiotic, r]))
-                    return (
-                      <tr key={org}>
-                        <td>{org}</td>
-                        {antibiotics.map(abx=>{
-                          const cell = byAbx[abx]
-                          const pct = cell? cell.percent_R : 0
-                          const shade = Math.min(100, Math.max(0, Math.round(pct))) // 0-100
-                          // simple shade using HSL lightness
-                          const bg = `hsl(215 80% ${100 - shade/1.5}%)`
-                          const color = shade>60? '#fff' : '#111'
-                          return (
-                            <td key={abx} style={{background:bg, color, textAlign:'center'}}>
-                              {cell? `${Math.round(pct)}%`:'–'}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+        ) : <div>No data</div>
       )}
-    </section>
+    </div>
   )
 }

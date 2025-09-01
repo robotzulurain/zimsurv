@@ -1,101 +1,78 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { apiFetch } from '../api'
+import React, { useMemo, useState } from 'react'
+import useLabData from '../hooks/useLabData'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
 
-const OPTS = {
-  host: ['', 'human','animal','environment'],
-  organism: ['', 'E. coli','Klebsiella','S. aureus','Pseudomonas','Enterococcus'],
-  antibiotic: ['', 'Ciprofloxacin','Ceftriaxone','Gentamicin','Ampicillin','Meropenem']
-}
+const Select = ({label, value, onChange, options=[]}) => (
+  <label className="small" style={{display:'flex',flexDirection:'column',gap:4}}>
+    {label}
+    <select value={value} onChange={e=>onChange(e.target.value)}>
+      <option>All</option>
+      {options.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
+  </label>
+)
 
 export default function SexAge(){
-  const [host,setHost]=useState('')
-  const [org,setOrg]=useState('')
-  const [abx,setAbx]=useState('')
+  const { rows, options, loading, error, filterData, aggSexAge } = useLabData()
+  const [f, setF] = useState({ host:'All', organism:'All', antibiotic:'All', city:'All', facility:'All' })
+  const onF = (k,v)=> setF(s=>({...s,[k]:v}))
 
-  const qs = useMemo(()=>{
-    const p = new URLSearchParams()
-    if(host) p.set('host',host)
-    if(org) p.set('organism',org)
-    if(abx) p.set('antibiotic',abx)
-    const s = p.toString()
-    return s? ('?'+s):''
-  },[host,org,abx])
-
-  const [rows,setRows]=useState(null)
-  const [err,setErr]=useState(null)
-
-  useEffect(()=>{
-    setRows(null); setErr(null)
-    apiFetch(`/api/summary/sex-age/${qs}`).then(setRows).catch(e=>setErr(String(e)))
-  },[qs])
+  const filtered = useMemo(()=>filterData(f), [rows, f, filterData])
+  const matrix = useMemo(()=>aggSexAge(filtered), [filtered, aggSexAge])
 
   return (
-    <section className="column" style={{gap:12}}>
-      <div className="row" style={{justifyContent:'space-between',alignItems:'center'}}>
-        <h2 className="section-title">Sex & Age</h2>
-        <div className="row" style={{gap:8}}>
-          <Select label="Host" value={host} onChange={setHost} opts={OPTS.host} />
-          <Select label="Organism" value={org} onChange={setOrg} opts={OPTS.organism} />
-          <Select label="Antibiotic" value={abx} onChange={setAbx} opts={OPTS.antibiotic} />
-        </div>
+    <div className="card">
+      <h3>Sex & Age</h3>
+      <div className="row" style={{gap:12, marginBottom:12}}>
+        <Select label="Host" value={f.host} onChange={v=>onF('host',v)} options={options.host}/>
+        <Select label="Organism" value={f.organism} onChange={v=>onF('organism',v)} options={options.organism}/>
+        <Select label="Antibiotic" value={f.antibiotic} onChange={v=>onF('antibiotic',v)} options={options.antibiotic}/>
+        <Select label="City" value={f.city} onChange={v=>onF('city',v)} options={options.city}/>
+        <Select label="Facility" value={f.facility} onChange={v=>onF('facility',v)} options={options.facility}/>
       </div>
 
-      {err && <div className="error">Error: {err}</div>}
-      {!rows && !err && <div className="muted">Loading…</div>}
-      {rows && rows.length===0 && <div className="muted">No data</div>}
+      {loading && <div>Loading…</div>}
+      {error && <div className="small" style={{color:'var(--bad)'}}>Error: {error}</div>}
 
-      {rows && rows.length>0 && (
-        <div className="card">
-          <table className="table">
-            <thead>
-              <tr><th>Age band</th><th>Male</th><th>Female</th><th>Unknown</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              {rows.map(r=>(
-                <tr key={r.band}>
-                  <td>{r.band}</td>
-                  <td>{r.M}</td>
-                  <td>{r.F}</td>
-                  <td>{r.U}</td>
-                  <td>{r.total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div style={{width:'100%', height:420, marginBottom:16}}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={matrix}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="band" />
+            <YAxis allowDecimals={false}/>
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="M" name="Male" fill="#1976d2" />
+            <Bar dataKey="F" name="Female" fill="#7b1fa2" />
+            <Bar dataKey="U" name="Unknown" fill="#9e9e9e" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
 
-          <div className="small muted" style={{marginTop:8}}>Stacked (M/F/U)</div>
-          <div className="column" style={{gap:8}}>
-            {rows.map(r=>{
-              const total = r.total || 1
-              const wM = (r.M/total)*100
-              const wF = (r.F/total)*100
-              const wU = (r.U/total)*100
-              return (
-                <div key={r.band} className="row" style={{alignItems:'center',gap:8}}>
-                  <div style={{width:56}} className="small">{r.band}</div>
-                  <div style={{flex:1, height:16, display:'flex', borderRadius:6, overflow:'hidden', background:'#f3f4f6'}}>
-                    <div title={`M ${r.M}`} style={{width:`${wM}%`, background:'#2563eb'}} />
-                    <div title={`F ${r.F}`} style={{width:`${wF}%`, background:'#22c55e'}} />
-                    <div title={`U ${r.U}`} style={{width:`${wU}%`, background:'#9ca3af'}} />
-                  </div>
-                  <div style={{width:40}} className="small">{r.total}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function Select({label,value,onChange,opts}){
-  return (
-    <label className="small" style={{display:'flex',alignItems:'center',gap:6}}>
-      <span>{label}</span>
-      <select value={value} onChange={e=>onChange(e.target.value)}>
-        {opts.map((o,i)=><option key={i} value={o}>{o||'All'}</option>)}
-      </select>
-    </label>
+      <div style={{overflowX:'auto'}}>
+        <table className="table" style={{width:'100%', borderCollapse:'collapse'}}>
+          <thead>
+            <tr>
+              <th style={{textAlign:'left'}}>Age band</th>
+              <th>Male</th>
+              <th>Female</th>
+              <th>Unknown</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map(r=>(
+              <tr key={r.band}>
+                <td>{r.band}</td>
+                <td style={{textAlign:'center'}}>{r.M}</td>
+                <td style={{textAlign:'center'}}>{r.F}</td>
+                <td style={{textAlign:'center'}}>{r.U}</td>
+                <td style={{textAlign:'center', fontWeight:600}}>{r.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

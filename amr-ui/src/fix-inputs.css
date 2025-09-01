@@ -1,0 +1,56 @@
+/* 🔒 FORCE readable text inside all form controls, everywhere */
+:root {
+  --field-bg: #ffffff;
+  --field-text: #111111;
+  --field-border: #444444;
+  --field-placeholder: #555555;
+}
+
+/* Target inputs/selects/textareas even if a dark theme sets white text on parents */
+input, select, textarea,
+.card input, .card select, .card textarea,
+.input input, .input select, .input textarea,
+label input, label select, label textarea {
+  background-color: var(--field-bg) !important;
+  color: var(--field-text) !important;
+  border: 1px solid var(--field-border) !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  font-size: 16px !important;
+  line-height: 1.3 !important;
+  caret-color: var(--field-text) !important;
+}
+
+/* Placeholder must be darker too */
+input::placeholder,
+textarea::placeholder {
+  color: var(--field-placeholder) !important;
+  opacity: 1 !important;
+}
+
+/* Dropdown options (when opened) */
+select option {
+  color: var(--field-text) !important;
+  background-color: var(--field-bg) !important;
+}
+
+/* Focus ring */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: #1976d2 !important;
+  box-shadow: 0 0 0 2px rgba(25,118,210,.25) !important;
+}
+
+/* Safari/Chrome autofill */
+input:-webkit-autofill,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--field-text) !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--field-bg) inset !important;
+  transition: background-color 99999s ease-in-out 0s !important;
+}
+
+/* If any parent forces white text, stop inheritance */
+.input, .card, label, .row, form {
+  color: inherit !important;  /* but fields themselves are forced to #111 above */
+}

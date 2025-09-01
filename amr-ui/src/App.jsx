@@ -1,5 +1,6 @@
+import "./fix-inputs.css";
 import React from 'react'
-import { NavLink, Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, NavLink } from 'react-router-dom'
 import Home from './pages/Home.jsx'
 import Trends from './pages/Trends.jsx'
 import Resistance from './pages/Resistance.jsx'
@@ -9,41 +10,49 @@ import LabResults from './pages/LabResults.jsx'
 import DataEntry from './pages/DataEntry.jsx'
 import Geo from './pages/Geo.jsx'
 import Debug from './pages/Debug.jsx'
-import './App.css'
+
+const tabs = [
+  ['/', 'Home'],
+  ['/trends', 'Trends'],
+  ['/resistance', 'Resistance'],
+  ['/sex-age', 'Sex & Age'],
+  ['/data-quality', 'Data Quality'],
+  ['/lab-results', 'Lab Results'],
+  ['/data-entry', 'Data Entry'],
+  ['/geo', 'Geo'],
+  ['/debug', 'Debug'],
+]
 
 export default function App(){
-  const tabs = [
-    { to:'/home', label:'Home', el:<Home/> },
-    { to:'/trends', label:'Trends', el:<Trends/> },
-    { to:'/resistance', label:'Resistance', el:<Resistance/> },
-    { to:'/sex-age', label:'Sex & Age', el:<SexAge/> },
-    { to:'/data-quality', label:'Data Quality', el:<DataQuality/> },
-    { to:'/lab-results', label:'Lab Results', el:<LabResults/> },
-    { to:'/data-entry', label:'Data Entry', el:<DataEntry/> },
-    { to:'/geo', label:'Geo', el:<Geo/> },
-    { to:'/debug', label:'Debug', el:<Debug/> },
-  ]
-
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">Zimbabwe AMR Surveillance</div>
-        <nav className="tabs">
-          {tabs.map(t=>(
-            <NavLink key={t.to} to={t.to} className={({isActive})=>`tab ${isActive?'active':''}`}>
-              {t.label}
-            </NavLink>
-          ))}
-        </nav>
-      </header>
-
-      <main className="main">
+    <>
+      <div className="topbar">
+        <div className="wrap">
+          <div className="brand">
+            <span className="dot"></span> Zimbabwe AMR Surveillance <small>prototype</small>
+          </div>
+          <nav className="nav">
+            {tabs.map(([to,label])=>(
+              <NavLink key={to} to={to} end className={({isActive})=> 'tab '+(isActive?'active':'')}>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+      </div>
+      <div className="container page">
         <Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          {tabs.map(t=> <Route key={t.to} path={t.to} element={t.el} />)}
-          <Route path="*" element={<Navigate to="/home" replace/>} />
+          <Route path="/" element={<Home/>} />
+          <Route path="/trends" element={<Trends/>} />
+          <Route path="/resistance" element={<Resistance/>} />
+          <Route path="/sex-age" element={<SexAge/>} />
+          <Route path="/data-quality" element={<DataQuality/>} />
+          <Route path="/lab-results" element={<LabResults/>} />
+          <Route path="/data-entry" element={<DataEntry/>} />
+          <Route path="/geo" element={<Geo/>} />
+          <Route path="/debug" element={<Debug/>} />
         </Routes>
-      </main>
-    </div>
+      </div>
+    </>
   )
 }
