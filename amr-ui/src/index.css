@@ -66,3 +66,21 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+.subtab {
+  border: 1px solid #ddd;
+  background: #fafafa;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.subtab.active { background: #eef4ff; border-color: #c9ddff; }
+.subtab:disabled { opacity: .6; cursor: not-allowed; }
+
+.table { border-collapse: collapse; width: 100%; }
+.table th, .table td { border: 1px solid #eee; padding: 6px 8px; text-align: left; }
+.section-title { font-size: 1.25rem; margin: 8px 0 12px; }
+.card { background: #fff; border:1px solid #eee; border-radius:12px; padding:12px; }
+.grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.small { font-size: .85rem; }
+.error { color:#b91c1c; }

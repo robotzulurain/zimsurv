@@ -1,5 +1,4 @@
 import React from 'react'
-
 export default function PercentBar({ value=0, max=100, height=10, label }) {
   const pct = Math.max(0, Math.min(100, (value/max)*100))
   return (
