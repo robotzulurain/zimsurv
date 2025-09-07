@@ -1,0 +1,417 @@
+from collections import defaultdict, Counter
+from datetime import date, datetime, timedelta
+from django.http import HttpResponse
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework import status
+
+class PublicAPIView(APIView):
+    permission_classes = [AllowAny]
+
+# -----------------------
+# Helpers
+# -----------------------
+def _parse_date_any(s: str):
+    s = (s or "").strip()
+    if not s:
+        return None
+    # ISO YYYY-MM-DD
+    try:
+        return datetime.fromisoformat(s).date().isoformat()
+    except Exception:
+        pass
+    # DD/MM/YYYY
+    try:
+        return datetime.strptime(s, "%d/%m/%Y").date().isoformat()
+    except Exception:
+        return None
+
+def _valid_ast(v):
+    return (v or "").strip() in {"S", "I", "R"}
+
+def _to_int_or_none(v):
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return None
+
+def ym(dstr):
+    return datetime.fromisoformat(dstr).strftime("%Y-%m")
+
+# -----------------------
+# Demo in-memory DATA
+# -----------------------
+MOCK_RECORDS = [
+    {"patient_id":"P001","sex":"F","age":34,"specimen_type":"Urine","organism":"Escherichia coli","antibiotic":"Ciprofloxacin","ast_result":"R","test_date":"2025-05-12","facility":"Harare Central Lab","host_type":"HUMAN","patient_type":"Outpatient","animal_species":""},
+    {"patient_id":"P002","sex":"M","age":22,"specimen_type":"Blood","organism":"Staphylococcus aureus","antibiotic":"Ceftriaxone","ast_result":"S","test_date":"2025-05-16","facility":"Bulawayo Vic Lab","host_type":"HUMAN","patient_type":"Inpatient","animal_species":""},
+    {"patient_id":"P003","sex":"M","age":45,"specimen_type":"Urine","organism":"Escherichia coli","antibiotic":"Ciprofloxacin","ast_result":"S","test_date":"2025-06-01","facility":"Harare Central Lab","host_type":"HUMAN","patient_type":"Outpatient","animal_species":""},
+    {"patient_id":"P004","sex":"F","age":27,"specimen_type":"Blood","organism":"Klebsiella pneumoniae","antibiotic":"Meropenem","ast_result":"S","test_date":"2025-06-10","facility":"Bulawayo Vic Lab","host_type":"HUMAN","patient_type":"Inpatient","animal_species":""},
+    {"patient_id":"P005","sex":"F","age":52,"specimen_type":"Urine","organism":"Escherichia coli","antibiotic":"Ceftriaxone","ast_result":"R","test_date":"2025-06-18","facility":"Gweru Gen Lab","host_type":"HUMAN","patient_type":"Outpatient","animal_species":""},
+    {"patient_id":"P006","sex":"M","age":36,"specimen_type":"Urine","organism":"Klebsiella pneumoniae","antibiotic":"Ciprofloxacin","ast_result":"R","test_date":"2025-07-03","facility":"Harare Central Lab","host_type":"HUMAN","patient_type":"Inpatient","animal_species":""},
+    {"patient_id":"P007","sex":"F","age":19,"specimen_type":"Stool","organism":"Salmonella enterica","antibiotic":"Amoxicillin","ast_result":"I","test_date":"2025-07-12","facility":"Bulawayo Vic Lab","host_type":"HUMAN","patient_type":"Outpatient","animal_species":""},
+    {"patient_id":"P008","sex":"F","age":61,"specimen_type":"Blood","organism":"Staphylococcus aureus","antibiotic":"Gentamicin","ast_result":"S","test_date":"2025-08-05","facility":"Harare Central Lab","host_type":"HUMAN","patient_type":"Inpatient","animal_species":""},
+    {"patient_id":"P009","sex":"M","age":33,"specimen_type":"Urine","organism":"Pseudomonas aeruginosa","antibiotic":"Ciprofloxacin","ast_result":"R","test_date":"2025-08-19","facility":"Gweru Gen Lab","host_type":"HUMAN","patient_type":"Outpatient","animal_species":""},
+    {"patient_id":"P010","sex":"F","age":48,"specimen_type":"Urine","organism":"Escherichia coli","antibiotic":"Meropenem","ast_result":"S","test_date":"2025-09-01","facility":"Harare Central Lab","host_type":"HUMAN","patient_type":"Outpatient","animal_species":""},
+]
+
+MOCK_ORGANISMS   = sorted({r["organism"] for r in MOCK_RECORDS})
+MOCK_ANTIBIOTICS = sorted({r["antibiotic"] for r in MOCK_RECORDS})
+MOCK_SPECIMEN_TYPES = sorted({r["specimen_type"] for r in MOCK_RECORDS})
+MOCK_FACILITIES  = sorted({r["facility"] for r in MOCK_RECORDS})
+MOCK_HOST_TYPES  = ["HUMAN","ANIMAL","ENVIRONMENT"]
+MOCK_ANIMAL_SPECIES = ["Cattle","Goat","Sheep","Chicken","Dog","Cat","Wildlife"]
+MOCK_PATIENT_TYPES = ["Inpatient","Outpatient","Unknown"]
+MOCK_SEX = ["M","F","Unknown"]
+MOCK_AST_RESULTS = ["S","I","R"]
+
+COORDS = {
+    "Harare Central Lab": (-17.8292, 31.0522),
+    "Bulawayo Vic Lab": (-20.1596, 28.5818),
+    "Gweru Gen Lab": (-19.4580, 29.8172),
+}
+
+# -----------------------
+# Filtering helper
+# -----------------------
+def filter_records(request):
+    qs = request.query_params
+    organism = qs.get("organism")
+    antibiotic = qs.get("antibiotic")
+    facility = qs.get("facility")
+    host_type = qs.get("host_type")
+    out = []
+    for r in MOCK_RECORDS:
+        if organism and r["organism"] != organism: continue
+        if antibiotic and r["antibiotic"] != antibiotic: continue
+        if facility and r["facility"] != facility: continue
+        if host_type and r["host_type"] != host_type: continue
+        out.append(r)
+    return out
+
+# -----------------------
+# SUMMARY / CHARTS
+# -----------------------
+class CountsSummaryView(PublicAPIView):
+    def get(self, request):
+        rows = filter_records(request)
+        return Response({
+            "as_of": date.today().isoformat(),
+            "total_tests": len(rows),
+            "unique_patients": len({r["patient_id"] for r in rows}),
+            "organisms": len({r["organism"] for r in rows}),
+            "antibiotics": len({r["antibiotic"] for r in rows}),
+        })
+
+class TimeTrendsView(PublicAPIView):
+    def get(self, request):
+        rows = filter_records(request)
+        bym = defaultdict(list)
+        for r in rows:
+            bym[ym(r["test_date"])].append(r)
+        series = []
+        for k in sorted(bym.keys()):
+            x = bym[k]
+            tests = len(x)
+            resistant = sum(1 for r in x if r["ast_result"] == "R")
+            percent_resistant = round((resistant / tests) * 100, 1) if tests else 0.0
+            series.append({"month": k, "tests": tests, "percent_resistant": percent_resistant})
+        return Response({"series": series})
+
+class AntibiogramView(PublicAPIView):
+    def get(self, request):
+        rows = filter_records(request)
+        table = defaultdict(lambda: defaultdict(lambda: {"S":0,"I":0,"R":0,"n":0}))
+        ab_set = set()
+        for r in rows:
+            ab_set.add(r["antibiotic"])
+            cell = table[r["organism"]][r["antibiotic"]]
+            cell[r["ast_result"]] += 1
+            cell["n"] += 1
+        cols = sorted(ab_set)
+        result_rows = []
+        for org in sorted(table.keys()):
+            S_list, n_list = [], []
+            for ab in cols:
+                cell = table[org][ab]
+                n = cell["n"]; s = cell["S"]
+                pctS = round((s/n)*100,1) if n else 0.0
+                S_list.append(pctS); n_list.append(n)
+            result_rows.append({"organism": org, "S": S_list, "n": n_list})
+        return Response({"columns": cols, "rows": result_rows, "note": "%S (percent susceptible); n = isolates tested"})
+
+class SexAgeView(PublicAPIView):
+    def get(self, request):
+        rows = filter_records(request)
+        csex = Counter(r["sex"] if r["sex"] in ("M","F") else "Unknown" for r in rows)
+        sex = [{"label": k, "count": v} for k,v in csex.items()]
+        bands = [("0-4",0,4),("5-17",5,17),("18-49",18,49),("50-64",50,64),("65+",65,200)]
+        band_counts = []
+        for label, lo, hi in bands:
+            cnt = sum(1 for r in rows if isinstance(r["age"], (int,float)) and lo <= r["age"] <= hi)
+            band_counts.append({"band": label, "count": cnt})
+        return Response({"sex": sex, "ageBands": band_counts})
+
+class FacilitiesView(PublicAPIView):
+    def get(self, request):
+        rows = filter_records(request)
+        byf = defaultdict(list)
+        for r in rows:
+            byf[r["facility"]].append(r)
+        features = []
+        for fac, x in byf.items():
+            tests = len(x)
+            resistant = sum(1 for r in x if r["ast_result"] == "R")
+            pct = round((resistant/tests)*100,1) if tests else 0.0
+            lat,lng = COORDS.get(fac, (-19.0,29.8))
+            features.append({"facility": fac, "province": "—", "lat": lat, "lng": lng, "samples": tests, "resistance_pct": pct})
+        return Response({"features": features})
+
+# -----------------------
+# OPTIONS / ENTRY / UPLOAD / TEMPLATE / EXPORT
+# -----------------------
+class OptionsView(PublicAPIView):
+    def get(self, request):
+        return Response({
+            "organisms": MOCK_ORGANISMS,
+            "antibiotics": MOCK_ANTIBIOTICS,
+            "specimen_types": MOCK_SPECIMEN_TYPES,
+            "facilities": MOCK_FACILITIES,
+            "host_types": MOCK_HOST_TYPES,
+            "animal_species": MOCK_ANIMAL_SPECIES,
+            "patient_types": MOCK_PATIENT_TYPES,
+            "sex": MOCK_SEX,
+            "ast_results": MOCK_AST_RESULTS,
+        })
+
+class ManualEntryView(PublicAPIView):
+    def post(self, request):
+        data = request.data if hasattr(request, 'data') else {}
+        required = ["patient_id","sex","age","specimen_type","organism","antibiotic","ast_result","test_date","facility","host_type","patient_type"]
+        missing = [k for k in required if k not in data or str(data[k]).strip() == ""]
+        if missing:
+            return Response({"ok": False, "error": f"Missing fields: {', '.join(missing)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if data.get("host_type") == "ANIMAL" and not str(data.get("animal_species","")).strip():
+            return Response({"ok": False, "error": "animal_species is required when host_type is ANIMAL"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            age = int(data.get("age", 0))
+            if age < 0 or age > 120:
+                return Response({"ok": False, "error": "Age must be between 0 and 120"}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({"ok": False, "error": "Age must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        iso = _parse_date_any(data.get("test_date",""))
+        if not iso:
+            return Response({"ok": False, "error": "test_date must be YYYY-MM-DD or DD/MM/YYYY"}, status=400)
+
+        MOCK_RECORDS.append({
+            "patient_id": data["patient_id"],
+            "sex": data["sex"],
+            "age": age,
+            "specimen_type": data["specimen_type"],
+            "organism": data["organism"],
+            "antibiotic": data["antibiotic"],
+            "ast_result": data["ast_result"],
+            "test_date": iso,
+            "facility": data["facility"],
+            "host_type": data["host_type"],
+            "patient_type": data["patient_type"],
+            "animal_species": data.get("animal_species",""),
+        })
+        return Response({"ok": True, "message": "Record saved."}, status=status.HTTP_201_CREATED)
+
+class UploadView(PublicAPIView):
+    def post(self, request):
+        import csv
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"ok": False, "error": "No file uploaded (field name 'file')."}, status=status.HTTP_400_BAD_REQUEST)
+        name = (f.name or "").lower()
+        if not (name.endswith(".csv") or name.endswith(".xlsx") or name.endswith(".xls")):
+            return Response({"ok": False, "error": "Only CSV or Excel files are accepted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        required = ["patient_id","sex","age","specimen_type","organism","antibiotic",
+                    "ast_result","test_date","facility","host_type","patient_type"]
+        optional = ["animal_species"]
+        headers = required + optional
+
+        rows = []
+        errors = []
+        imported = 0
+
+        try:
+            if name.endswith(".csv"):
+                content = f.read()
+                try:
+                    text = content.decode("utf-8")
+                except Exception:
+                    text = content.decode("latin-1")
+                reader = csv.DictReader(text.splitlines())
+                cols = [h.strip() for h in (reader.fieldnames or [])]
+                missing = [h for h in required if h not in cols]
+                if missing:
+                    return Response({"ok": False, "error": f"Missing columns: {', '.join(missing)}"}, status=400)
+                for i, row in enumerate(reader, start=2):
+                    rows.append((i, {k: row.get(k, "") for k in headers}))
+            else:
+                try:
+                    from openpyxl import load_workbook
+                except Exception:
+                    return Response({"ok": False, "error": "Excel support requires openpyxl. Install it or upload CSV."}, status=400)
+                wb = load_workbook(filename=f, read_only=True)
+                ws = wb.active
+                head_row = next(ws.iter_rows(min_row=1, max_row=1))
+                cols = ["" if c.value is None else str(c.value).strip() for c in head_row]
+                missing = [h for h in required if h not in cols]
+                if missing:
+                    return Response({"ok": False, "error": f"Missing columns: {', '.join(missing)}"}, status=400)
+                idx = {h: cols.index(h) for h in cols}
+                line = 1
+                for r in ws.iter_rows(min_row=2):
+                    line += 1
+                    rec = {}
+                    for h in headers:
+                        j = idx.get(h)
+                        rec[h] = "" if j is None else ("" if r[j].value is None else str(r[j].value))
+                    rows.append((line, rec))
+        except Exception as e:
+            return Response({"ok": False, "error": f"Failed to read file: {e}"}, status=400)
+
+        global MOCK_RECORDS
+        for line, rec in rows:
+            miss = [k for k in required if not str(rec.get(k, "")).strip()]
+            if miss:
+                errors.append({"line": line, "error": f"Missing fields: {', '.join(miss)}"})
+                continue
+            age = _to_int_or_none(rec.get("age"))
+            if age is None or age < 0 or age > 120:
+                errors.append({"line": line, "error": "Age must be an integer 0–120"})
+                continue
+            if not _valid_ast(rec.get("ast_result")):
+                errors.append({"line": line, "error": "ast_result must be one of 'S','I','R'"})
+                continue
+            host = (rec.get("host_type","") or "").upper()
+            if host not in {"HUMAN","ANIMAL","ENVIRONMENT"}:
+                errors.append({"line": line, "error": "host_type must be HUMAN, ANIMAL, or ENVIRONMENT"})
+                continue
+            if host == "ANIMAL" and not str(rec.get("animal_species","")).strip():
+                errors.append({"line": line, "error": "animal_species is required when host_type is ANIMAL"})
+                continue
+            iso = _parse_date_any(rec.get("test_date",""))
+            if not iso:
+                errors.append({"line": line, "error": "test_date must be YYYY-MM-DD or DD/MM/YYYY"})
+                continue
+
+            newrec = {
+                "patient_id": rec.get("patient_id").strip(),
+                "sex": (rec.get("sex") or "Unknown").strip(),
+                "age": age,
+                "specimen_type": rec.get("specimen_type").strip(),
+                "organism": rec.get("organism").strip(),
+                "antibiotic": rec.get("antibiotic").strip(),
+                "ast_result": rec.get("ast_result").strip(),
+                "test_date": iso,
+                "facility": rec.get("facility").strip(),
+                "host_type": host,
+                "patient_type": (rec.get("patient_type") or "Unknown").strip(),
+                "animal_species": (rec.get("animal_species") or "").strip(),
+            }
+            MOCK_RECORDS.append(newrec)
+            imported += 1
+
+        return Response({"ok": True, "filename": f.name, "imported": imported, "errors": errors, "message": "Imported."}, status=200)
+
+class TemplateCSVView(PublicAPIView):
+    def get(self, request):
+        csv_text = (
+            "patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date,facility,host_type,patient_type,animal_species\n"
+            "P001,F,34,Urine,Escherichia coli,Ciprofloxacin,S,2025-08-15,Harare Central Lab,HUMAN,Outpatient,\n"
+            "A001,F,2,Stool,Salmonella enterica,Amoxicillin,R,2025-08-16,Harare Central Lab,ANIMAL,Unknown,Chicken\n"
+            "E001,,0,Water sample,Escherichia coli,Ciprofloxacin,S,2025-08-17,Harare Central Lab,ENVIRONMENT,Unknown,\n"
+        )
+        resp = HttpResponse(csv_text, content_type="text/csv")
+        resp["Content-Disposition"] = 'attachment; filename="amr_template.csv'"
+        return resp
+
+# -----------------------
+# ALERTS
+# -----------------------
+class AlertsView(PublicAPIView):
+    def get(self, request):
+        rows = filter_records(request)
+        alerts = []
+
+        # Rare resistance
+        long_counts = defaultdict(lambda: Counter())
+        for r in MOCK_RECORDS:
+            long_counts[(r["organism"], r["antibiotic"])][r["ast_result"]] += 1
+        for r in rows:
+            key = (r["organism"], r["antibiotic"])
+            c = long_counts[key]
+            n = c['S'] + c['I'] + c['R']
+            if n == 0:
+                continue
+            pctS = (c['S'] / n) * 100.0
+            if r["ast_result"] == "R" and pctS >= 80.0:
+                al = {"type": "Rare resistance pattern", "organism": r["organism"], "antibiotic": r["antibiotic"],
+                      "facility": r["facility"], "test_date": r["test_date"], "severity": "high"}
+                if r["facility"] in COORDS:
+                    al["lat"], al["lng"] = COORDS[r["facility"]]
+                alerts.append(al)
+
+        # Spikes
+        bym = {}
+        for r in rows:
+            m = ym(r["test_date"])
+            bym[m] = bym.get(m, 0) + 1
+        if bym:
+            months_sorted = sorted(bym.keys())
+            lastm = months_sorted[-1]
+            prev = [bym[m] for m in months_sorted[:-1]] or [0]
+            avg_prev = sum(prev)/len(prev) if prev else 0
+            if avg_prev > 0 and bym[lastm] > 2 * avg_prev:
+                alerts.append({"type": "Sudden spike",
+                               "message": f"{bym[lastm]} tests in {lastm} (>2× avg {avg_prev:.1f})",
+                               "month": lastm, "severity": "medium"})
+
+        # Clusters (last 14 days)
+        now = datetime.now()
+        window = now - timedelta(days=14)
+        by_key = defaultdict(int)  # (facility, organism)
+        for r in rows:
+            try:
+                dt = datetime.fromisoformat(r["test_date"])
+            except Exception:
+                continue
+            if dt >= window:
+                by_key[(r["facility"], r["organism"])] += 1
+        for (fac, org), cnt in by_key.items():
+            if cnt >= 2:
+                al = {"type": "Potential cluster", "facility": fac, "organism": org,
+                      "count_last_14d": cnt, "severity": "medium"}
+                if fac in COORDS:
+                    al["lat"], al["lng"] = COORDS[fac]
+                alerts.append(al)
+
+        return Response({"alerts": alerts})
+
+# -----------------------
+# EXPORT
+# -----------------------
+class GlassExportView(PublicAPIView):
+    def get(self, request):
+        import csv, io
+        rows = filter_records(request)
+        cols = ["patient_id","sex","age","specimen_type","organism","antibiotic",
+                "ast_result","test_date","facility","host_type","patient_type","animal_species"]
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(cols)
+        for r in rows:
+            w.writerow([r.get(c,"") for c in cols])
+        out = buf.getvalue()
+        resp = HttpResponse(out, content_type="text/csv")
+        resp["Content-Disposition"] = 'attachment; filename="glass_export.csv'"
+        return resp

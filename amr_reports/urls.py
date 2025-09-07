@@ -1,24 +1,23 @@
 from django.urls import path
-from . import views_summary
-from .views_dataentry import DataEntryCreate, DataEntryBulk
+from . import api_real as api
 
 urlpatterns = [
-    # summaries
-    path('api/summary/counts-summary/', views_summary.counts_summary, name='counts-summary'),
-    path('api/summary/resistance-time-trend/', views_summary.resistance_time_trend, name='resistance-time-trend'),
-    path('api/summary/antibiogram/', views_summary.antibiogram, name='antibiogram'),
-    path('api/summary/sex-age/', views_summary.sex_age_matrix, name='sex-age'),
-    path('api/summary/data-quality/', views_summary.data_quality, name='data-quality'),
+    # SUMMARY
+    path('summary/counts-summary', api.CountsSummaryView.as_view()),
+    path('summary/time-trends', api.TimeTrendsView.as_view()),
+    path('summary/antibiogram', api.AntibiogramView.as_view()),
+    path('summary/sex-age', api.SexAgeView.as_view()),
 
-    # lab results table endpoint (already implemented)
-    path('api/lab-results/', views_summary.lab_results, name='lab-results'),
+    # GEO
+    path('geo/facilities', api.FacilitiesView.as_view()),
 
-    # data entry
-    path('api/data-entry/', DataEntryCreate.as_view(), name='data-entry'),
-    path('api/data-entry/bulk/', DataEntryBulk.as_view(), name='data-entry-bulk'),
-]
-from . import views_filters
+    # OPTIONS / ENTRY / UPLOAD / TEMPLATE
+    path('options', api.OptionsView.as_view()),
+    path('entry', api.ManualEntryView.as_view()),
+    path('upload', api.UploadView.as_view()),
+    path('templates/csv', api.TemplateCSVView.as_view()),
 
-urlpatterns += [
-    path("api/filters/", views_filters.filter_options, name="filters"),
+    # ALERTS / EXPORT
+    path('alerts', api.AlertsView.as_view()),
+    path('export/glass', api.GlassExportView.as_view()),
 ]

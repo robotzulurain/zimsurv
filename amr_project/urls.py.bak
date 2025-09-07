@@ -1,0 +1,45 @@
+from django.contrib import admin
+from django.urls import path, include
+from django.http import HttpResponse
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+
+def home(_):
+    return HttpResponse("""
+    <!doctype html><html lang="en"><head>
+      <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+      <title>AMR Backend</title>
+      <style>
+        :root{--teal:#0a6;--bg:#0b2230;--card:#0f2c3d;}
+        body{margin:0;font-family:system-ui,Segoe UI,Arial;background:#0b2230;color:#e8f6f2}
+        .wrap{max-width:960px;margin:60px auto;padding:0 16px}
+        .card{background:#0f2c3d;border:1px solid #12435b;border-radius:16px;padding:24px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+        h1{margin:0 0 10px 0;font-size:32px}
+        p{color:#cbe7e1}
+        .links{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+        a{display:inline-block;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.15);text-decoration:none;color:#fff}
+        a:hover{border-color:#24b394}
+        .primary{background:linear-gradient(135deg,#0a6,#1aa383)}
+        .muted{background:#173b4f}
+        small{opacity:.8}
+      </style>
+    </head><body><div class="wrap"><div class="card">
+      <h1>AMR Backend</h1>
+      <p>Zimbabwe AMR Surveillance – GLASS-aligned API & Admin.</p>
+      <div class="links">
+        <a class="primary" href="/admin/">Admin</a>
+        <a class="muted" href="/api/">Browsable API</a>
+        <a class="muted" href="/api/schema/swagger-ui/">Swagger UI</a>
+        <a class="muted" href="/api/schema/redoc/">ReDoc</a>
+      </div>
+      <p><small>Tip: use Swagger to test endpoints; Admin for data management.</small></p>
+    </div></div></body></html>
+    """)
+
+urlpatterns = [
+    path("", home),  # pretty landing page
+    path("admin/", admin.site.urls),
+    path("api/", include("amr_reports.urls")),   # keep your app routes
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+]

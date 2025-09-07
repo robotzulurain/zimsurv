@@ -1,43 +1,41 @@
-import React, { useMemo, useState } from 'react'
-import useLabData from '../hooks/useLabData'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
+import React, { useEffect, useState } from 'react'
+import { apiFetch } from '../api'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts'
 
-const Select = ({label, value, onChange, options=[]}) => (
-  <label className="small" style={{display:'flex',flexDirection:'column',gap:4}}>
-    {label}
-    <select value={value} onChange={e=>onChange(e.target.value)}>
-      <option>All</option>
-      {options.map(o=><option key={o} value={o}>{o}</option>)}
-    </select>
-  </label>
-)
+export default function Trends(){
+  const [data, setData] = useState([])
+  const [filters, setFilters] = useState({host:'', organism:'', antibiotic:'', city:'', facility:''})
 
-export default function Trends() {
-  const { rows, options, loading, error, filterData, aggMonthly } = useLabData()
-  const [f, setF] = useState({ host:'All', organism:'All', antibiotic:'All', city:'All', facility:'All' })
-  const onF = (k,v)=> setF(s=>({...s,[k]:v}))
+  const load = async()=>{
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([k,v])=>{ if(v && v!=='All') params.append(k,v) })
+    const res = await apiFetch('/api/summary/resistance-time-trend/?'+params.toString())
+    setData(Array.isArray(res)?res:[])
+  }
+  useEffect(()=>{ load() },[filters])
 
-  const filtered = useMemo(()=>filterData(f), [rows, f, filterData])
-  const monthly = useMemo(()=>aggMonthly(filtered), [filtered, aggMonthly])
+  const onChange=(k,v)=> setFilters(f=>({...f,[k]:v}))
 
   return (
-    <div className="card">
-      <h3>Monthly Resistance Trends</h3>
-      <div className="row" style={{gap:12, marginBottom:12}}>
-        <Select label="Host" value={f.host} onChange={v=>onF('host',v)} options={options.host}/>
-        <Select label="Organism" value={f.organism} onChange={v=>onF('organism',v)} options={options.organism}/>
-        <Select label="Antibiotic" value={f.antibiotic} onChange={v=>onF('antibiotic',v)} options={options.antibiotic}/>
-        <Select label="City" value={f.city} onChange={v=>onF('city',v)} options={options.city}/>
-        <Select label="Facility" value={f.facility} onChange={v=>onF('facility',v)} options={options.facility}/>
-      </div>
-      {loading && <div>Loading…</div>}
-      {error && <div className="small" style={{color:'var(--bad)'}}>Error: {error}</div>}
-      {!loading && monthly.length===0 && <div>No data</div>}
-      {!loading && monthly.length>0 && (
-        <div style={{width:'100%', height:420}}>
+    <div className="container">
+      <div className="card">
+        <h3>Monthly Resistance Trends</h3>
+        <div className="row" style={{marginBottom:12}}>
+          {['host','organism','antibiotic','city','facility'].map(k=>(
+            <label key={k} className="input" style={{minWidth:160}}>
+              <span>{k}</span>
+              <select value={filters[k]} onChange={e=>onChange(k,e.target.value)}>
+                <option value="">All</option>
+                {/* replace static options with dynamic ones later */}
+                {k==='host' && ['human','animal','environment'].map(x=><option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+
+        <div className="chart-360">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthly}>
-              <CartesianGrid strokeDasharray="3 3" />
+            <BarChart data={data}>
               <XAxis dataKey="month" />
               <YAxis />
               <Tooltip />
@@ -47,7 +45,8 @@ export default function Trends() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      )}
+        {!data.length && <div className="small" style={{marginTop:8}}>No data</div>}
+      </div>
     </div>
   )
 }

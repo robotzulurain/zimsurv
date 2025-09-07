@@ -1,37 +1,39 @@
 from django.db import models
-
-class Facility(models.Model):
-    name = models.CharField(max_length=120, unique=True)
-    city = models.CharField(max_length=120, blank=True, default="")
-    lat = models.FloatField(null=True, blank=True)
-    lon = models.FloatField(null=True, blank=True)
-
-    def __str__(self):
-        return self.name
+from django.utils import timezone
 
 class LabResult(models.Model):
-    patient_id = models.CharField(max_length=50)
-    sex = models.CharField(max_length=1, choices=[('M', 'Male'), ('F', 'Female')])
-    age = models.PositiveIntegerField()
-    specimen_type = models.CharField(max_length=100)
-    organism = models.CharField(max_length=100)
-    antibiotic = models.CharField(max_length=100)
-    ast_result = models.CharField(
+    patient_id     = models.CharField(max_length=64, db_index=True, null=True, blank=True)
+    sex            = models.CharField(max_length=10, blank=True, null=True)
+    age            = models.PositiveIntegerField(null=True, blank=True)
+    specimen_type  = models.CharField(max_length=64, db_index=True, null=True, blank=True)
+    organism       = models.CharField(max_length=128, db_index=True, null=True, blank=True)
+    antibiotic     = models.CharField(max_length=128, db_index=True, null=True, blank=True)
+    ast_result     = models.CharField(
         max_length=1,
-        choices=[('S', 'Susceptible'), ('I', 'Intermediate'), ('R', 'Resistant')],
-        default='R'
+        choices=[("S","S"),("I","I"),("R","R")],
+        db_index=True,
+        null=True,
+        blank=True
     )
-    test_date = models.DateField()
-
-    # --- One Health fields ---
-    host_type = models.CharField(
+    test_date      = models.DateField(db_index=True, null=True, blank=True)
+    facility       = models.CharField(max_length=128, db_index=True, null=True, blank=True)
+    host_type      = models.CharField(
         max_length=16,
-        choices=[('human','Human'),('animal','Animal'),('environment','Environment')],
-        default='human'
+        choices=[("HUMAN","HUMAN"),("ANIMAL","ANIMAL"),("ENVIRONMENT","ENVIRONMENT")],
+        db_index=True,
+        null=True,
+        blank=True
     )
-    facility = models.ForeignKey(
-        Facility, null=True, blank=True, on_delete=models.SET_NULL, related_name='lab_results'
-    )
+    patient_type   = models.CharField(max_length=16, blank=True, null=True)
+    animal_species = models.CharField(max_length=64, blank=True, null=True)
+
+    created_at     = models.DateTimeField(default=timezone.now, editable=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["organism", "antibiotic"]),
+            models.Index(fields=["facility", "test_date"]),
+        ]
 
     def __str__(self):
-        return f"{self.patient_id} - {self.organism} - {self.antibiotic}"
+        return f"{self.patient_id or '-'} {self.organism or '-'} {self.antibiotic or '-'} {self.ast_result or '-'} @ {self.test_date or '-'}"

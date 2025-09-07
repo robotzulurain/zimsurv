@@ -1,13 +1,9 @@
 from django.contrib import admin
-from .models import LabResult, Facility
+from .models import LabResult
 
 @admin.register(LabResult)
 class LabResultAdmin(admin.ModelAdmin):
-    list_display = ['id','patient_id','host_type','facility','organism','antibiotic','ast_result','specimen_type','test_date']
-    search_fields = ('patient_id','organism','antibiotic')
-    list_filter = ['host_type','facility','specimen_type','organism','antibiotic','ast_result','test_date']
-
-@admin.register(Facility)
-class FacilityAdmin(admin.ModelAdmin):
-    list_display = ['id','name','city','lat','lon']
-    search_fields = ['name','city']
+    list_display  = ("patient_id","organism","antibiotic","ast_result","sex","age","test_date","facility","host_type")
+    list_filter   = ("organism","antibiotic","ast_result","sex","host_type","facility")
+    search_fields = ("patient_id","organism","antibiotic","facility")
+    readonly_fields = ()

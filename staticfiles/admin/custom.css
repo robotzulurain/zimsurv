@@ -1,0 +1,4 @@
+/* Subtle polish */
+.card { border-radius: 14px !important; }
+.table td { vertical-align: middle; }
+#changelist-filter h3 { font-weight: 700; }
