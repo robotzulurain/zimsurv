@@ -1,41 +1,51 @@
-import React, { useEffect, useState } from "react";
-import { api } from "../api";
+import { useFilters, defaultFilters } from "../filters";
 
-export default function FilterBar({ onChange }) {
-  const [opts, setOpts] = useState(null);
-  const [vals, setVals] = useState({ organism:"", antibiotic:"", facility:"", host_type:"" });
+export default function FilterBar() {
+  const { filters, setFilters, lists, loading, ALL } = useFilters();
 
-  useEffect(() => { api.options().then(setOpts).catch(console.error); }, []);
-
-  useEffect(() => { onChange?.(vals); }, [vals]); // emit whenever any select changes
-
-  const set = (k) => (e) => setVals(v => ({ ...v, [k]: e.target.value }));
+  const change = (key) => (e) => setFilters({ ...filters, [key]: e.target.value });
+  const reset = () => setFilters(defaultFilters);
 
   return (
-    <div className="mb-4 flex flex-wrap gap-3 items-end">
-      {!opts ? <span className="text-sm text-gray-500">Loading filters…</span> : (
-        <>
-          <Select id="organism" label="Organism" list={opts.organisms} value={vals.organism} onChange={set('organism')} />
-          <Select id="antibiotic" label="Antibiotic" list={opts.antibiotics} value={vals.antibiotic} onChange={set('antibiotic')} />
-          <Select id="facility" label="Facility" list={opts.facilities} value={vals.facility} onChange={set('facility')} />
-          <Select id="host_type" label="Host Type" list={opts.host_types} value={vals.host_type} onChange={set('host_type')} />
-          <button onClick={() => setVals({ organism:"",antibiotic:"",facility:"",host_type:"" })}
-                  className="px-3 py-1 rounded bg-gray-200">Reset</button>
-        </>
-      )}
+    <div style={wrap}>
+      <Field label="Host">
+        <select value={filters.host_type} onChange={change("host_type")} disabled={loading}>
+          {lists.hosts?.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+      </Field>
+      <Field label="Organism">
+        <select value={filters.organism} onChange={change("organism")} disabled={loading}>
+          {lists.organisms?.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+      </Field>
+      <Field label="Antibiotic">
+        <select value={filters.antibiotic} onChange={change("antibiotic")} disabled={loading}>
+          {lists.antibiotics?.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+      </Field>
+      <Field label="Facility">
+        <select value={filters.facility} onChange={change("facility")} disabled={loading}>
+          {lists.facilities?.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+      </Field>
+      <Field label="Patient Type">
+        <select value={filters.patient_type} onChange={change("patient_type")} disabled={loading}>
+          {lists.patient_types?.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+      </Field>
+      <button onClick={reset} title="Reset to All" style={btn}>Reset</button>
     </div>
   );
 }
 
-function Select({ id, label, list, value, onChange }) {
+function Field({ label, children }) {
   return (
-    <label className="text-sm">
-      <span className="mr-2 text-gray-600">{label}</span>
-      <select id={id} name={id} value={value} onChange={onChange}
-        className="px-2 py-1 rounded border bg-white">
-        <option value="">All</option>
-        {list?.map(v => <option key={v} value={v}>{v}</option>)}
-      </select>
+    <label style={{ display:"grid", gap:4 }}>
+      <span style={{ fontSize:12, color:"#6b7280" }}>{label}</span>
+      {children}
     </label>
   );
 }
+
+const wrap = { display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8, marginBottom:12, alignItems:"end" };
+const btn = { height:36, borderRadius:8, border:"1px solid #ddd", background:"#f8fafc", cursor:"pointer" };

@@ -1,0 +1,6 @@
+patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date,host_type,facility,patient_type
+P001,M,34,Blood,Escherichia coli,Ciprofloxacin,R,2025-08-01,HUMAN,Harare Central Lab,INPATIENT
+P002,F,22,Urine,Klebsiella pneumoniae,Ceftriaxone,S,2025-08-02,HUMAN,Bulawayo NatLab,OUTPATIENT
+P003,M,5,Stool,Salmonella spp.,Amoxicillin-clavulanate,R,2025-08-03,HUMAN,Gweru General Hospital,OUTPATIENT
+P004,F,47,Sputum,Staphylococcus aureus,Gentamicin,I,2025-08-04,HUMAN,Harare Central Lab,INPATIENT
+P005,M,60,Wound,Pseudomonas aeruginosa,Meropenem,S,2025-08-05,HUMAN,Bulawayo NatLab,UNKNOWN

@@ -1,59 +1,53 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from "react-router-dom";
-import Overview from "./Overview";
-import Trends from "./Trends";
-import Antibiogram from "./Antibiogram";
-import SexAge from "./SexAge";
-import Geo from "./Geo";
-import DataEntry from "./DataEntry";
-import Alerts from "./Alerts.jsx";
-import Reports from "./Reports";
+import { useState } from "react";
+import Overview from "./components/Overview.jsx";
+import Trends from "./components/Trends.jsx";
+import Antibiogram from "./components/Antibiogram.jsx";
+import SexAge from "./components/SexAge.jsx";
+import GeoTab from "./components/Geo.jsx";
+import Reports from "./components/Reports.jsx";
+import Alerts from "./components/Alerts.jsx";
+import DataEntry from "./components/DataEntry.jsx";
+import FilterBar from "./components/FilterBar.jsx";
+import { FiltersProvider } from "./filters.jsx";
 
-const tabs = [
-  { label: "Overview", path: "/overview", Component: Overview },
-  { label: "Trends", path: "/trends", Component: Trends },
-  { label: "Antibiogram", path: "/antibiogram", Component: Antibiogram },
-  { label: "Sex & Age", path: "/sex-age", Component: SexAge },
-  { label: "Geo", path: "/geo", Component: Geo },
-  { label: "Data Entry", path: "/data-entry", Component: DataEntry },
-  { label: "Alerts", path: "/alerts", Component: Alerts },
-  { label: "Reports", path: "/reports", Component: Reports },
-];
+const TABS = ["Overview","Trends","Antibiogram","Sex & Age","Geo","Data Entry","Alerts","Reports"];
 
 export default function App() {
-  return (
-    <Router>
-      <div className="min-h-screen bg-gray-50 text-gray-900">
-        <header className="bg-teal-600 text-white">
-          <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-2">
-            <h1 className="text-lg font-bold mr-4">AMR Surveillance</h1>
-            <nav className="flex flex-wrap gap-2">
-              {tabs.map(t => (
-                <NavLink
-                  key={t.path}
-                  to={t.path}
-                  className={({ isActive }) =>
-                    "px-3 py-1 rounded-md hover:bg-teal-700 " + (isActive ? "bg-teal-800 font-semibold" : "bg-teal-600")
-                  }
-                  end
-                >
-                  {t.label}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-        </header>
+  const [tab, setTab] = useState("Overview");
 
-        <main className="mx-auto max-w-6xl px-4 py-6">
-          <Routes>
-            <Route path="/" element={<Navigate to="/overview" replace />} />
-            {tabs.map(({ path, Component }) => (
-              <Route key={path} path={path} element={<Component />} />
-            ))}
-            <Route path="*" element={<Navigate to="/overview" replace />} />
-          </Routes>
-        </main>
+  return (
+    <FiltersProvider>
+      <div className="app">
+        <h1>AMR Surveillance Dashboard</h1>
+
+        <div className="tabs">
+          {TABS.map(t => (
+            <button key={t} className={`tab ${tab===t ? "active":""}`} onClick={()=>setTab(t)}>{t}</button>
+          ))}
+        </div>
+
+        {/* Global filter bar */}
+        <FilterBar />
+
+        <div className="panel">
+          {tab==="Overview" && <Overview/>}
+          {tab==="Trends" && <Trends/>}
+          {tab==="Antibiogram" && <Antibiogram/>}
+          {tab==="Sex & Age" && <SexAge/>}
+          {tab==="Geo" && <GeoTab/>}
+          {tab==="Data Entry" && <DataEntry/>}
+          {tab==="Alerts" && <Alerts/>}
+          {tab==="Reports" && <Reports/>}
+        </div>
+
+        <style>{`
+          .app { font-family: system-ui, sans-serif; padding: 16px; }
+          .tabs { display:flex; gap:8px; flex-wrap: wrap; margin: 8px 0 16px; }
+          .tab { padding:8px 12px; border-radius:10px; border:1px solid #ddd; background:#f9fafb; cursor:pointer; }
+          .tab.active { background:#e6f2ff; border-color:#93c5fd; }
+          .panel { background:white; border:1px solid #eee; border-radius:12px; padding:12px; }
+        `}</style>
       </div>
-    </Router>
+    </FiltersProvider>
   );
 }

@@ -1,73 +1,77 @@
-import React, { useEffect, useState } from "react";
-import { api, qsFromFilters } from "./api";
+import React, { useEffect, useMemo, useState } from "react";
+import { api } from "./api";
 import FilterBar from "./components/FilterBar";
-
-// Darker, higher-contrast heat
-function cellBg(pctS) {
-  const t = Math.max(0, Math.min(100, pctS)) / 100; // clamp 0..100
-  const r = Math.round(255 * (1 - t));
-  const g = Math.round(255 * t);
-  const b = 60;
-  return `rgba(${r},${g},${b},0.55)`;
-}
-function cellTextColor(pctS){ return pctS < 35 ? "#fff" : "#111"; }
+import { demoRows, applyFilters, calcOptions, calcAntibiogram } from "./utils/fallback";
 
 export default function Antibiogram() {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState("");
   const [filters, setFilters] = useState({});
+  const [options, setOptions] = useState({});
+  const [rows, setRows] = useState([]);
 
-  // ✅ Do not pass an async function or a function that returns a Promise directly to useEffect
   useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const res = await api.antibiogram(qsFromFilters(filters));
-        if (!cancelled) setData(res);
-      } catch (e) {
-        if (!cancelled) setErr(e.message || "Failed to load antibiogram");
-      }
-    };
-    run();
-    return () => { cancelled = true; }; // proper cleanup function
-  }, [filters]); // object reference changes via setFilters in <FilterBar/>
+    api.options().then(setOptions).catch(() => setOptions(calcOptions(demoRows)));
+  }, []);
+
+  useEffect(() => {
+    api.antibiogram(filters)
+      .then((d) => setRows(Array.isArray(d) ? d : []))
+      .catch(() => setRows(calcAntibiogram(applyFilters(demoRows, filters))));
+  }, [filters]);
+
+  const orgs = useMemo(() => [...new Set(rows.map((r) => r.organism))], [rows]);
+  const abxs = useMemo(() => [...new Set(rows.map((r) => r.antibiotic))], [rows]);
+  const cell = (o, a) =>
+    rows.find((r) => r.organism === o && r.antibiotic === a)?.percent_susceptible ?? null;
 
   return (
-    <section>
-      <h2 className="text-xl font-bold mb-2">Antibiogram</h2>
-      <FilterBar onChange={setFilters} />
-      {err && <div className="rounded bg-red-100 text-red-700 p-3 mb-3">{err}</div>}
-      {!data ? <p>Loading…</p> :
-        <div className="rounded-xl bg-white shadow p-4 overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-white">
+    <main>
+      <FilterBar title="Antibiogram" filters={filters} setFilters={setFilters} options={options} />
+      <section className="p-4">
+        <div style={{ overflowX: "auto" }}>
+          <table className="table" style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
               <tr>
-                <th className="text-left p-2 font-semibold">Organism</th>
-                {data.columns.map((ab) => (
-                  <th key={ab} className="text-left p-2 font-semibold">{ab}</th>
+                <th style={{ textAlign: "left" }}>Organism \\ Antibiotic</th>
+                {abxs.map((a) => (
+                  <th key={a} style={{ textAlign: "center" }}>
+                    {a}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.organism} className="border-t">
-                  <td className="p-2 font-medium">{r.organism}</td>
-                  {r.S.map((pctS, idx) => (
-                    <td key={idx} className="p-2"
-                        style={{ backgroundColor: cellBg(pctS), color: cellTextColor(pctS) }}>
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-semibold">{pctS}% S</span>
-                        <span className="opacity-80">n={r.n?.[idx] ?? "—"}</span>
-                      </div>
-                    </td>
-                  ))}
+              {orgs.map((o) => (
+                <tr key={o}>
+                  <td style={{ padding: "6px 8px" }}>{o}</td>
+                  {abxs.map((a) => {
+                    const v = cell(o, a);
+                    const bg =
+                      v == null
+                        ? "#f7f7f7"
+                        : v >= 80
+                        ? "#d1fadf"
+                        : v >= 60
+                        ? "#e6ffb0"
+                        : v >= 40
+                        ? "#fff4b8"
+                        : v >= 20
+                        ? "#ffe0b3"
+                        : "#ffd1d1";
+                    return (
+                      <td
+                        key={a}
+                        style={{ textAlign: "center", padding: "6px 8px", background: bg }}
+                      >
+                        {v == null ? "–" : `${v}% S`}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
           </table>
-          {data.note && <p className="mt-3 text-gray-600">{data.note}</p>}
         </div>
-      }
-    </section>
+      </section>
+    </main>
   );
 }
