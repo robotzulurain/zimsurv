@@ -13,6 +13,23 @@ export default function FilterBar() {
           {lists.hosts?.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
       </Field>
+
+      {filters.host_type === "ENVIRONMENT" && (
+        <Field label="Environment Type">
+          <select value={filters.environment_type || "All"} onChange={change("environment_type")} disabled={loading}>
+            {lists.environment_types?.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </Field>
+      )}
+
+      {filters.host_type === "ANIMAL" && (
+        <Field label="Animal Species">
+          <select value={filters.animal_species || "All"} onChange={change("animal_species")} disabled={loading}>
+            {lists.animal_species?.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </Field>
+      )}
+
       <Field label="Organism">
         <select value={filters.organism} onChange={change("organism")} disabled={loading}>
           {lists.organisms?.map(v => <option key={v} value={v}>{v}</option>)}

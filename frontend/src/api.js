@@ -40,12 +40,19 @@ async function req(path, { method = "GET", json, formData, params } = {}) {
 }
 
 // ---- OPTIONS ----
-export const options = (params) => req("/options", { params });
-
+export const options = async (params) => {
+  const data = await req("/options", { params });
+  return {
+    hosts: (data && data.hosts) || ["HUMAN","ANIMAL","ENVIRONMENT"],
+    environment_types: (data && data.environment_types) || [],
+    animal_species: (data && data.animal_species) || [],
+    ...data,
+  };
+};
 // ---- SUMMARY ----
-export const countsSummary = (params) => req("/summary/counts-summary", { params });
-export const timeTrends     = (params) => req("/summary/time-trends",     { params });
-export const antibiogram    = (params) => req("/summary/antibiogram",     { params });
+export const countsSummary = (params = {}) => req("/summary/counts-summary", { params: buildSummaryParams(params) });
+export const timeTrends     = (params = {}) => req("/summary/time-trends",     { params: buildSummaryParams(params) });
+export const antibiogram    = (params = {}) => req("/summary/antibiogram",     { params: buildSummaryParams(params) });
 export const sexAge         = (params) => req("/summary/sex-age",         { params });
 
 // ---- GEO ----
@@ -84,3 +91,23 @@ const api = {
   uploadCSV,
 };
 export default api;
+
+
+// === AMR helper: build params for summary endpoints ===
+function buildSummaryParams(input = {}) {
+  const out = {};
+  const set = (k, v) => { if (v != null && v !== "") out[k] = v; };
+
+  // Host + dependent filters
+  set("host_type", input.host_type);
+  if (input.host_type === "ENVIRONMENT") set("environment_type", input.environment_type);
+  if (input.host_type === "ANIMAL")      set("animal_species",   input.animal_species);
+
+  // Pass-through others without overwriting above keys
+  Object.entries(input).forEach(([k, v]) => {
+    if (["host_type","environment_type","animal_species"].includes(k)) return;
+    if (v != null && v !== "" && out[k] == null) out[k] = v;
+  });
+  return out;
+}
+// END_AMR_HELPER

@@ -1,68 +1,135 @@
-import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api'
+import React, { useEffect, useState } from "react";
 
-const Row = (p)=><div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'center', ...p.style}}>{p.children}</div>
-const Group = ({label, children})=>(
-  <label style={{display:'flex', flexDirection:'column', gap:4, fontSize:12, color:'#334155'}}>
-    <span>{label}</span>
-    {children}
-  </label>
-)
-const Select = (p)=><select {...p} style={{minWidth:180, padding:'6px 8px', border:'1px solid #ddd', borderRadius:8, background:'#fff'}} />
+/**
+ * Adds conditional selects:
+ *  - Host=ENVIRONMENT => Environment Type
+ *  - Host=ANIMAL      => Animal Species
+ * Nothing else changes visually.
+ */
+export default function Filters({ value, onChange, options }) {
+  const [local, setLocal] = useState(value || {});
+  useEffect(() => setLocal(value || {}), [value]);
 
-const HOST_TYPES = ['All','HUMAN','ANIMAL','ENVIRONMENT']
-const PATIENT_TYPES = ['All','INPATIENT','OUTPATIENT','UNKNOWN']
+  const setField = (k, v) => {
+    const next = { ...local, [k]: v || undefined };
+    if (k === "host_type") {
+      if (v === "ENVIRONMENT") {
+        next.animal_species = undefined;
+      } else if (v === "ANIMAL") {
+        next.environment_type = undefined;
+      } else {
+        next.environment_type = undefined;
+        next.animal_species = undefined;
+      }
+    }
+    setLocal(next);
+    onChange?.(next);
+  };
 
-export default function Filters({value, onChange}){
-  const [opts, setOpts] = useState({ facilities:[], organisms:[], antibiotics:[] })
-  const key = useMemo(()=>JSON.stringify(value||{}), [value])
-
-  useEffect(()=>{
-    let alive = true
-    api.options().then(o=>{ if(alive) setOpts(o||{facilities:[], organisms:[], antibiotics:[]}) })
-                 .catch(()=> setOpts({facilities:[], organisms:[], antibiotics:[]}))
-    return ()=>{ alive=false }
-  }, [])
-
-  const v = value || {}
-  const upd = (k,val)=> onChange && onChange({ ...v, [k]: val })
+  const hosts        = options?.hosts || ["HUMAN","ANIMAL","ENVIRONMENT"];
+  const envTypes     = options?.environment_types || [];
+  const species      = options?.animal_species || [];
+  const organisms    = options?.organisms || [];
+  const antibiotics  = options?.antibiotics || [];
+  const facilities   = options?.facilities || [];
+  const patientTypes = options?.patient_types || [];
 
   return (
-    <div style={{border:'1px solid #e5e7eb', borderRadius:12, padding:12, background:'#fafafa', margin:'8px 0 16px'}}>
-      <Row>
-        <Group label="Facility">
-          <Select value={v.facility ?? 'All'} onChange={e=>upd('facility', e.target.value)}>
-            <option>All</option>
-            {(opts.facilities||[]).map((f,i)=><option key={i} value={f}>{f}</option>)}
-          </Select>
-        </Group>
+    <div className="filters flex flex-wrap items-center gap-3">
+      {/* Host */}
+      <div>
+        <label className="block text-sm">Host</label>
+        <select
+          className="border rounded px-2 py-1"
+          value={local.host_type || ""}
+          onChange={(e) => setField("host_type", e.target.value)}
+        >
+          <option value="">All</option>
+          {hosts.map((h) => <option key={h} value={h}>{h}</option>)}
+        </select>
+      </div>
 
-        <Group label="Organism">
-          <Select value={v.organism ?? 'All'} onChange={e=>upd('organism', e.target.value)}>
-            <option>All</option>
-            {(opts.organisms||[]).map((o,i)=><option key={i} value={o}>{o}</option>)}
-          </Select>
-        </Group>
+      {/* Environment Type (Host=ENVIRONMENT) */}
+      {local.host_type === "ENVIRONMENT" && (
+        <div>
+          <label className="block text-sm">Environment Type</label>
+          <select
+            className="border rounded px-2 py-1"
+            value={local.environment_type || ""}
+            onChange={(e) => setField("environment_type", e.target.value)}
+          >
+            <option value="">All</option>
+            {envTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      )}
 
-        <Group label="Antibiotic">
-          <Select value={v.antibiotic ?? 'All'} onChange={e=>upd('antibiotic', e.target.value)}>
-            <option>All</option>
-            {(opts.antibiotics||[]).map((a,i)=><option key={i} value={a}>{a}</option>)}
-          </Select>
-        </Group>
+      {/* Animal Species (Host=ANIMAL) */}
+      {local.host_type === "ANIMAL" && (
+        <div>
+          <label className="block text-sm">Animal Species</label>
+          <select
+            className="border rounded px-2 py-1"
+            value={local.animal_species || ""}
+            onChange={(e) => setField("animal_species", e.target.value)}
+          >
+            <option value="">All</option>
+            {species.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      )}
 
-        <Group label="Host Type">
-          <Select value={v.host ?? 'All'} onChange={e=>upd('host', e.target.value)}>
-            {HOST_TYPES.map(h=> <option key={h} value={h}>{h}</option>)}
-          </Select>
-        </Group>
+      {/* Organism */}
+      <div>
+        <label className="block text-sm">Organism</label>
+        <select
+          className="border rounded px-2 py-1"
+          value={local.organism || ""}
+          onChange={(e) => setField("organism", e.target.value)}
+        >
+          <option value="">All</option>
+          {organisms.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
 
-        <Group label="Patient Type">
-          <Select value={v.patient_type ?? 'All'} onChange={e=>upd('patient_type', e.target.value)}>
-            {PATIENT_TYPES.map(p=> <option key={p} value={p}>{p}</option>)}
-          </Select>
-        </Group>
-      </Row>
+      {/* Antibiotic */}
+      <div>
+        <label className="block text-sm">Antibiotic</label>
+        <select
+          className="border rounded px-2 py-1"
+          value={local.antibiotic || ""}
+          onChange={(e) => setField("antibiotic", e.target.value)}
+        >
+          <option value="">All</option>
+          {antibiotics.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+
+      {/* Facility */}
+      <div>
+        <label className="block text-sm">Facility</label>
+        <select
+          className="border rounded px-2 py-1"
+          value={local.facility || ""}
+          onChange={(e) => setField("facility", e.target.value)}
+        >
+          <option value="">All</option>
+          {facilities.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+      </div>
+
+      {/* Patient Type */}
+      <div>
+        <label className="block text-sm">Patient Type</label>
+        <select
+          className="border rounded px-2 py-1"
+          value={local.patient_type || ""}
+          onChange={(e) => setField("patient_type", e.target.value)}
+        >
+          <option value="">All</option>
+          {patientTypes.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
     </div>
-  )
+  );
 }

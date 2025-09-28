@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import csv, io, json
+from datetime import datetime
+from typing import List, Dict, Any
+
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import LabResult
+
+VALID_RESULTS = {"S", "I", "R"}
+
+# ---------- helpers ----------
+def _parse_date_any(d):
+    """Accept YYYY-MM-DD, dd/mm/YYYY, mm/dd/YYYY, dd-mm-YYYY, ISO."""
+    if not d:
+        return None
+    s = str(d).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        return None
+
+def _norm(v):
+    if v is None:
+        return ""
+    return str(v).strip()
+
+def _row_to_records(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Accept WHONET/GLASS-like wide row OR single S/I/R row.
+    Required base columns (case-insens ok): patient_id, sex, age, specimen_type,
+    organism, test_date, host_type, facility, patient_type.
+    For antibiotics: either columns 'antibiotic' + 'ast_result' or multiple rows in CSV.
+    """
+    # Case-insensitive keys
+    r = {k.lower().strip(): (row[k] if row[k] is not None else "") for k in row}
+
+    base_required = ["patient_id","sex","specimen_type","organism","test_date","host_type","facility","patient_type"]
+    missing = [k for k in base_required if not _norm(r.get(k))]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}")
+
+    d = _parse_date_any(r.get("test_date"))
+    if not d:
+        raise ValueError("Invalid test_date; use YYYY-MM-DD or dd/mm/YYYY")
+
+    # Single antibiotic per line path
+    ant = _norm(r.get("antibiotic"))
+    res = _norm(r.get("ast_result")).upper()[:1]
+
+    if ant and res in VALID_RESULTS:
+        return [{
+            "patient_id": _norm(r.get("patient_id")),
+            "sex": _norm(r.get("sex")).upper()[:1] or "U",
+            "age": int(_norm(r.get("age")) or 0),
+            "specimen_type": _norm(r.get("specimen_type")),
+            "organism": _norm(r.get("organism")),
+            "antibiotic": ant,
+            "ast_result": res,
+            "test_date": d,
+            "host_type": _norm(r.get("host_type")).upper(),
+            "facility": _norm(r.get("facility")),
+            "patient_type": _norm(r.get("patient_type")).upper(),
+            "animal_species": _norm(r.get("animal_species")),
+            "environment_type": _norm(r.get("environment_type")),
+        }]
+    else:
+        # If no antibiotic/res in this row, treat as no-ABX row (skip)
+        # Some WHONET/GLASS exports repeat sample per antibiotic; if missing, we don't create anything.
+        return []
+
+def _create_records(records: List[Dict[str, Any]]) -> (int, List[str]):
+    created = 0
+    errors: List[str] = []
+    for i, rec in enumerate(records, start=1):
+        try:
+            LabResult.objects.create(**rec)
+            created += 1
+        except Exception as e:
+            errors.append(f"Row {i}: {e}")
+    return created, errors
+
+# ---------- Views ----------
+@method_decorator(csrf_exempt, name="dispatch")
+class CSVUploadOpenView(APIView):
+    """
+    Accepts multipart/form-data 'file' with CSV or XLSX.
+    CSV is parsed server-side with newline='' and UTF-8-SIG to avoid client CSV errors.
+    XLSX parsed with openpyxl if available.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        f = request.FILES.get("file")
+        if not f:
+            return Response({
+                "status":"error",
+                "detail":"No file uploaded. Choose a CSV (UTF-8) or Excel (.xlsx) file and try again.",
+                "friendly":"No file chosen. Please select a CSV or Excel file."
+            }, status=400)
+
+        name = (getattr(f, "name", "") or "").lower()
+
+        try:
+            if name.endswith(".xlsx") or name.endswith(".xls"):
+                try:
+                    import openpyxl
+                except Exception:
+                    return Response({
+                        "status":"error",
+                        "detail":"XLSX reader not available on server.",
+                        "friendly":"Excel file detected, but Excel reader is not installed on the server. Save as CSV (UTF-8) and try again."
+                    }, status=400)
+
+                wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+                ws = wb.active
+                rows = list(ws.iter_rows(values_only=True))
+                if not rows:
+                    return Response({"status":"ok","created":0,"errors":[]})
+
+                header = [(_norm(h)).lower() for h in rows[0]]
+                created = 0
+                errors: List[str] = []
+                for ridx, row in enumerate(rows[1:], start=2):
+                    rowdict = {header[i]: (row[i] if i < len(row) else "") for i in range(len(header))}
+                    try:
+                        recs = _row_to_records(rowdict)
+                        c, e = _create_records(recs)
+                        created += c
+                        errors.extend([f"Row {ridx}: {msg}" for msg in e])
+                    except Exception as e:
+                        errors.append(f"Row {ridx}: {e}")
+                return Response({"status":"ok","created":created,"errors":errors})
+
+            # Else: treat as CSV
+            # Use TextIOWrapper(newline='') to let csv module handle CRLF/CR issues properly
+            data = f.read()
+            buf = io.BytesIO(data)
+            txt = io.TextIOWrapper(buf, encoding="utf-8-sig", newline="")
+            reader = csv.DictReader(txt)
+
+            # Basic header check
+            hdr = [h.strip().lower() for h in reader.fieldnames or []]
+            expected_min = {"patient_id","sex","specimen_type","organism","test_date","host_type","facility","patient_type"}
+            if not expected_min.issubset(set(hdr)):
+                return Response({
+                    "status":"error",
+                    "detail": f"Expected columns at least: {', '.join(sorted(expected_min))}. Got: {', '.join(hdr) or '(none)'}",
+                    "friendly": "The file columns don’t match what’s expected. Please use the provided template or include the required columns.",
+                }, status=400)
+
+            created = 0
+            errors: List[str] = []
+            for lineno, row in enumerate(reader, start=2):
+                try:
+                    recs = _row_to_records(row)
+                    c, e = _create_records(recs)
+                    created += c
+                    errors.extend([f"Row {lineno}: {msg}" for msg in e])
+                except Exception as e:
+                    errors.append(f"Row {lineno}: {e}")
+
+            return Response({"status":"ok","created":created,"errors":errors})
+
+        except csv.Error as e:
+            # Friendly CSV error for laypeople
+            return Response({
+                "status":"error",
+                "detail": f"CSV parse error: {e}",
+                "friendly": ("The CSV could not be read. This often happens if a cell contains a line break "
+                             "or commas but wasn’t enclosed in quotes. "
+                             "Please: 1) open in Excel, 2) Save As → CSV (UTF-8), "
+                             "or use the Excel (.xlsx) template, then upload again.")
+            }, status=400)
+        except Exception as e:
+            return Response({
+                "status":"error",
+                "detail": f"Unexpected error: {e}",
+                "friendly": "The file could not be processed. Please save it as CSV (UTF-8) or Excel (.xlsx) and try again."
+            }, status=400)
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ManualEntryOpenView(APIView):
+    """Create a sample via JSON body; supports antibiotics array."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            data = request.data if hasattr(request, "data") else json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return Response({"status":"error","detail":"Invalid JSON body"}, status=400)
+
+        base_required = ["patient_id","sex","specimen_type","organism","test_date","host_type","facility","patient_type"]
+        missing = [k for k in base_required if not _norm(data.get(k))]
+        if missing:
+            return Response({"status":"error","detail":f"Missing: {', '.join(missing)}"}, status=400)
+
+        d = _parse_date_any(data.get("test_date"))
+        if not d:
+            return Response({"status":"error","detail":"Invalid test_date; use YYYY-MM-DD or dd/mm/YYYY"}, status=400)
+
+        abx = data.get("antibiotics") or []
+        if not isinstance(abx, list) or not abx:
+            abx = [{"antibiotic": data.get("antibiotic",""), "ast_result": data.get("ast_result","")}]
+
+        created = 0
+        errors: List[str] = []
+        for i, a in enumerate(abx, start=1):
+            ant = _norm(a.get("antibiotic"))
+            res = _norm(a.get("ast_result")).upper()[:1]
+            if not ant or res not in VALID_RESULTS:
+                errors.append(f"Antibiotic row {i}: need antibiotic + S/I/R")
+                continue
+            try:
+                LabResult.objects.create(
+                    patient_id=_norm(data.get("patient_id")),
+                    sex=_norm(data.get("sex")).upper()[:1] or "U",
+                    age=int(_norm(data.get("age")) or 0),
+                    specimen_type=_norm(data.get("specimen_type")),
+                    organism=_norm(data.get("organism")),
+                    antibiotic=ant,
+                    ast_result=res,
+                    test_date=d,
+                    host_type=_norm(data.get("host_type")).upper(),
+                    facility=_norm(data.get("facility")),
+                    patient_type=_norm(data.get("patient_type")).upper(),
+                    animal_species=_norm(data.get("animal_species")),
+                    environment_type=_norm(data.get("environment_type")),
+                )
+                created += 1
+            except Exception as e:
+                errors.append(str(e))
+
+        return Response({"status":"ok","created":created,"errors":errors})

@@ -50,15 +50,17 @@ export function FiltersProvider({ children }) {
 
         const organisms = toList(o?.organisms || o?.microbes);
         const antibiotics = toList(o?.antibiotics || o?.abx);
-        const facilities = Array.isArray(o?.facilities)
+
+        // one-health lists (fallbacks if backend doesn’t provide)
+        const environment_types = toList(o?.environment_types || []) || [];
+        const animal_species     = toList(o?.animal_species || []) || [];
+const facilities = Array.isArray(o?.facilities)
           ? o.facilities.map(f => f?.name ?? f?.label ?? String(f)).filter(Boolean)
           : toList(o?.facilities);
         const hosts = toList(o?.hosts || ["HUMAN", "ANIMAL", "ENVIRONMENT"]);
         const patient_types = toList(o?.patient_types || ["INPATIENT", "OUTPATIENT", "UNKNOWN"]);
 
         // one-health lists (fallbacks if backend doesn’t provide)
-        const animal_species = toList(o?.animal_species) || ["Cattle","Goats","Sheep","Poultry","Pigs","Dogs","Cats","Wild birds","Rodents"];
-        const environment_types = toList(o?.environment_types) || ["Water","Wastewater","Soil","Food","Surface swab","Air","Drinking water"];
 
         setLists({
           organisms: [ALL, ...organisms],

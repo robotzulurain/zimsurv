@@ -4,6 +4,8 @@ from . import reports_views as rviews
 from . import alerts_views as aviews
 
 urlpatterns = [
+    path('options', views.options_fixed),
+    path('options', views.options_clean),
     # options/templates
     path("options", views.options_view),
     path("templates/csv", views.csv_template),

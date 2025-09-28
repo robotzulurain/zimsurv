@@ -1,3 +1,4 @@
+import BulkUpload from "./BulkUpload";
 import { useEffect, useMemo, useState } from "react";
 import { options, createEntry, uploadCSV } from "../api";
 import { useFilters, applyFilters } from "../filters";
@@ -397,6 +398,7 @@ export default function DataEntry() {
       {/* CSV/XLSX Upload */}
       <div style={card}>
         <h3>Bulk Upload (CSV/XLSX)</h3>
+      <BulkUpload />
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:8 }}>
           <label style={{ display:"grid", gap:4 }}>
             <span style={{ fontSize:12, color:"#6b7280" }}>File format</span>
@@ -412,7 +414,6 @@ export default function DataEntry() {
               : "Expected columns: patient_id, sex, age, specimen_type, organism, antibiotic, ast_result, test_date, host_type, facility, patient_type"}
           </div>
         </div>
-        <input type="file" accept=".csv,.xlsx,.xls" onChange={onCSV} />
       </div>
     </div>
   );

@@ -1,0 +1,4 @@
+patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date,facility,host_type,patient_type
+H001,F,25,Blood,Escherichia coli,Ciprofloxacin,R,2025-09-01,Harare Central,HUMAN,INPATIENT
+H002,M,44,Urine,Klebsiella pneumoniae,Amoxicillin,S,2025-09-02,Bulawayo Clinic,HUMAN,OUTPATIENT
+A001,,2,Water,Salmonella enterica,Gentamicin,R,2025-09-03,Matabeleland River,ENVIRONMENT,UNKNOWN

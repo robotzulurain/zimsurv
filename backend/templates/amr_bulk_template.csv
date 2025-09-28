@@ -1,0 +1,9 @@
+patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date,host_type,facility,patient_type,animal_species,environment_type
+# Example HUMAN rows (leave animal/environment empty)
+HUM-001,F,29,URINE,Escherichia coli,Ciprofloxacin,R,2025-09-24,HUMAN,Harare Central Lab,OUTPATIENT,,
+HUM-002,M,41,BLOOD,Klebsiella pneumoniae,Gentamicin,S,2025-09-24,HUMAN,Gweru Gen Lab,INPATIENT,,
+# Example ANIMAL rows (set animal_species; env empty)
+ANI-001,U,2,FECAL,Escherichia coli,Amoxicillin,R,2025-09-24,ANIMAL,Bulawayo Vet,UNKNOWN,Cattle,
+ANI-002,U,1,FECAL,Staphylococcus aureus,Ceftriaxone,S,2025-09-24,ANIMAL,Bulawayo Vet,UNKNOWN,Poultry,
+# Example ENV rows (set environment_type; animal empty)
+ENV-001,U,0,WATER,Escherichia coli,Amoxicillin,S,2025-09-24,ENVIRONMENT,Bulawayo NatLab,UNKNOWN,,Water

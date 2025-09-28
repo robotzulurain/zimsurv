@@ -292,3 +292,17 @@ class ManualEntryOpenView(APIView):
         except Exception as e:
             return Response({"status":"error","detail": str(e)}, status=400)
         return Response({"status":"ok","created": created})
+from pathlib import Path
+from .whonet_upload import handle_whonet_upload
+
+# Example: inside your POST /api/upload/csv handler
+def upload_csv(request):
+    f = request.FILES.get('file')
+    if f:
+        tmp = Path("/tmp") / f.name
+        with tmp.open("wb") as out:
+            out.write(f.read())
+        # Use WHONET handler
+        result = handle_whonet_upload(tmp)
+        return JsonResponse(result)
+    return JsonResponse({"status": "error", "errors": ["No file uploaded"]})

@@ -1,0 +1,128 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.utils.dateparse import parse_date
+from datetime import datetime
+import json
+
+from .models import LabResult
+
+VALID_RESULTS = {"R", "I", "S"}
+
+class CSVUploadOpenView(APIView):
+    """
+    Minimal placeholder so imports in urls.py succeed.
+    (Returns 200 with a helpful message.)
+    """
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, *args, **kwargs):
+        return Response({"status": "ok", "detail": "CSV upload endpoint placeholder."})
+
+
+class ManualEntryOpenView(APIView):
+    """
+    Accept either:
+      A) Single antibiotic at top level:
+         { ..., "antibiotic": "Ciprofloxacin", "ast_result": "R" }
+      B) Multiple antibiotics:
+         { ..., "antibiotics": [{"antibiotic":"...", "ast_result":"R"}, ...] }
+    Creates one LabResult row per antibiotic.
+    """
+    permission_classes = [AllowAny]
+
+    def _norm_date(self, s):
+        """Accept 'YYYY-MM-DD' or 'DD/MM/YYYY' and return a date object."""
+        if not s:
+            return None
+        if isinstance(s, datetime):
+            return s.date()
+        s = str(s).strip()
+        # Try ISO first
+        d = parse_date(s)
+        if d:
+            return d
+        # Try DD/MM/YYYY
+        try:
+            return datetime.strptime(s, "%d/%m/%Y").date()
+        except Exception:
+            return None
+
+    def post(self, request, *args, **kwargs):
+        # request.data may be DRF's QueryDict; coerce to plain dict
+        if hasattr(request, "data"):
+            raw = request.data
+            try:
+                data = dict(raw)
+                # collapse single-item lists
+                for k, v in list(data.items()):
+                    if isinstance(v, (list, tuple)) and v:
+                        data[k] = v[-1]
+            except Exception:
+                data = raw
+        else:
+            try:
+                data = json.loads(request.body.decode("utf-8"))
+            except Exception:
+                return Response({"detail": "Invalid JSON"}, status=400)
+
+        # Shared fields
+        patient_id    = (data.get("patient_id") or "").strip()
+        sex           = (data.get("sex") or "").strip()[:1].upper() or "U"
+        try:
+            age = int(data.get("age") or 0)
+        except Exception:
+            age = 0
+        specimen_type = (data.get("specimen_type") or "").strip()
+        organism      = (data.get("organism") or "").strip()
+        test_date     = self._norm_date(data.get("test_date"))
+        host_type     = (data.get("host_type") or "").strip().upper() or "HUMAN"
+        facility      = (data.get("facility") or "").strip()
+        patient_type  = (data.get("patient_type") or "UNKNOWN").strip().upper()
+
+        environment_type = (data.get("environment_type") or "").strip()
+        animal_species   = (data.get("animal_species") or "").strip()
+
+        # Build antibiotic items
+        items = []
+        antibiotics = data.get("antibiotics")
+        if isinstance(antibiotics, list):
+            for it in antibiotics:
+                ab = (it.get("antibiotic") or "").strip()
+                ar = (it.get("ast_result") or "").strip().upper()[:1]
+                if ab and ar in VALID_RESULTS:
+                    items.append((ab, ar))
+        else:
+            ab = (data.get("antibiotic") or "").strip()
+            ar = (data.get("ast_result") or "").strip().upper()[:1]
+            if ab and ar in VALID_RESULTS:
+                items.append((ab, ar))
+
+        if not items:
+            return Response({"detail": "No valid antibiotic/ast_result found"}, status=400)
+        if not patient_id or not organism or not test_date:
+            return Response({"detail": "Missing required fields (patient_id, organism, test_date)."}, status=400)
+
+        # Create rows
+        created = 0
+        for abx, ast in items:
+            LabResult.objects.create(
+                patient_id    = patient_id,
+                sex           = sex,
+                age           = age,
+                specimen_type = specimen_type,
+                organism      = organism,
+                antibiotic    = abx,
+                ast_result    = ast,
+                test_date     = test_date,
+                host_type     = host_type,
+                facility      = facility,
+                patient_type  = patient_type,
+                environment_type = environment_type,
+                animal_species   = animal_species,
+            )
+            created += 1
+
+        return Response({"status": "ok", "created": created})

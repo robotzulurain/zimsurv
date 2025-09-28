@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: amr-backend
+    env: python
+    plan: free
+    branch: main
+    buildCommand: ./build.sh
+    startCommand: ./startup.sh
+    envVars:
+      - key: DATABASE_URL
+        value: your_neon_connection_string_here
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: admin
+      - key: DJANGO_SUPERUSER_EMAIL
+        value: admin@amrapp.com
+      - key: DJANGO_SUPERUSER_PASSWORD
+        value: your_secure_password_123
+      - key: SECRET_KEY
+        value: generate_a_long_random_string_here
+      - key: DEBUG
+        value: false
+      - key: ALLOWED_HOSTS
+        value: .onrender.com

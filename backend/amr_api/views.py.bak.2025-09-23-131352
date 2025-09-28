@@ -1,0 +1,495 @@
+import csv
+from io import TextIOWrapper
+from datetime import datetime
+from django.db.models import Count, Q
+from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.response import Response
+from django.http import HttpResponse
+from django.contrib.auth import authenticate
+from rest_framework.authtoken.models import Token
+from .models import LabResult
+
+# Known facility coordinates (extend as needed)
+FAC_COORDS = {
+    'Harare Central Lab':   (-17.8292, 31.0522),
+    'Bulawayo NatLab':      (-20.1325, 28.6265),
+    'Gweru General Hospital': (-19.4570, 29.8167),
+    'Mutare Provincial Lab':  (-18.9730, 32.6709),
+    'Masvingo General Lab':   (-20.0745, 30.8327),
+}
+
+
+def _norm(x): return (x or "").strip()
+def _is_all(x): return (x is None) or (_norm(x).lower() == "all")
+
+def _safe_date(s):
+    s = (s or "").strip()
+    if not s: return None
+    try: return datetime.fromisoformat(s).date()
+    except: return None
+
+def _sanitize_ast(v):
+    v = (v or '').strip().upper()[:1]
+    return v if v in ('R','I','S') else 'S'  # default to S if unknown
+
+def _apply_filters(qs, params):
+    fac = params.get('facility'); org = params.get('organism')
+    abx = params.get('antibiotic'); host = params.get('host')
+    start = _safe_date(params.get('start')); end = _safe_date(params.get('end'))
+    if fac and not _is_all(fac): qs = qs.filter(facility=fac)
+    if org and not _is_all(org): qs = qs.filter(organism=org)
+    if abx and not _is_all(abx): qs = qs.filter(antibiotic=abx)
+    if host and not _is_all(host): qs = qs.filter(host_type=host)
+    if start: qs = qs.filter(test_date__gte=start)
+    if end:   qs = qs.filter(test_date__lte=end)
+    return qs
+
+# ---------- AUTH ----------
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_token_auth(request):
+    u = request.data.get('username','') or request.data.get('email','')
+    p = request.data.get('password','')
+    user = authenticate(username=u, password=p)
+    if not user:
+        __opt = {'error':'Invalid credentials'}, status=400
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+token, _ = Token.objects.get_or_create(user=user)
+    __opt = {'token': token.key, 'username': user.username}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def whoami(request):
+    __opt = {'username': request.user.username}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+# ---------- OPTIONS ----------
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def options(request):
+    facilities = list(LabResult.objects.values_list('facility', flat=True).distinct())
+    organisms  = list(LabResult.objects.values_list('organism',  flat=True).distinct())
+    antibiotics= list(LabResult.objects.values_list('antibiotic',flat=True).distinct())
+    __opt = {'facilities': facilities, 'organisms': organisms, 'antibiotics': antibiotics}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+# ---------- SUMMARIES ----------
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def counts_summary(request):
+    def _safe_date(s):
+        from datetime import datetime
+        s = (s or '').strip()
+        if not s: return None
+        try: return datetime.fromisoformat(s).date()
+        except: return None
+    from django.db.models import Q, Count
+    qs = LabResult.objects.all()
+    fac = request.GET.get('facility'); org = request.GET.get('organism')
+    abx = request.GET.get('antibiotic'); host = request.GET.get('host')
+    start = _safe_date(request.GET.get('start')); end = _safe_date(request.GET.get('end'))
+    if fac and fac.lower()!='all': qs = qs.filter(facility=fac)
+    if org and org.lower()!='all': qs = qs.filter(organism=org)
+    if abx and abx.lower()!='all': qs = qs.filter(antibiotic=abx)
+    if host and host.lower()!='all': qs = qs.filter(host_type=host)
+    if start: qs = qs.filter(test_date__gte=start)
+    if end:   qs = qs.filter(test_date__lte=end)
+
+    total = qs.count()
+    patients = qs.exclude(patient_id__isnull=True).exclude(patient_id__exact='').values('patient_id').distinct().count()
+    facilities = qs.exclude(facility__isnull=True).exclude(facility__exact='').values('facility').distinct().count()
+
+    R = qs.filter(ast_result__iexact='R').count()
+    I = qs.filter(ast_result__iexact='I').count()
+    S = qs.filter(ast_result__iexact='S').count()
+    pctR = (R/total) if total else 0.0
+    __opt = {'total': total, 'patients': patients, 'facilities': facilities, 'pctR': pctR, 'R':R,'I':I,'S':S}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def time_trends(request):
+    qs = _apply_filters(LabResult.objects.all(), request.GET)
+    agg = (request.GET.get('agg') or 'month').lower()
+    trunc = TruncMonth if agg=='month' else TruncQuarter if agg=='quarter' else TruncYear
+    qs = qs.annotate(bucket=trunc('test_date')).values('bucket').annotate(
+        tests=Count('id'),
+        R=Count('id', filter=Q(ast_result__iexact='R')),
+    ).order_by('bucket')
+    rows = []
+    for a in qs:
+        t = a['tests'] or 0
+        r = a['R'] or 0
+        rows.append({'month': a['bucket'].strftime('%Y-%m'), 'tests': t, 'pctR': (r/t) if t else 0.0})
+    if not rows:  # demo fallback
+        rows = [{"month":"2025-01","tests":120,"pctR":0.34},{"month":"2025-02","tests":140,"pctR":0.31}]
+    rows.setdefault("hosts", ["HUMAN", "ANIMAL", "ENVIRONMENT"])
+# Populate environment_types and animal_species from DB if possible; otherwise coerce to []
+try:
+    from .models import LabResult  # ok if duplicate, Python tolerates
+    rows["environment_types"] = list(
+        LabResult.objects.exclude(environment_type__isnull=True).exclude(environment_type__exact="")
+        .values_list("environment_type", flat=True).distinct().order_by("environment_type")
+    )
+except Exception:
+    rows["environment_types"] = rows.get("environment_types") or []
+try:
+    rows["animal_species"] = list(
+        LabResult.objects.exclude(animal_species__isnull=True).exclude(animal_species__exact="")
+        .values_list("animal_species", flat=True).distinct().order_by("animal_species")
+    )
+except Exception:
+    rows["animal_species"] = rows.get("animal_species") or []
+__opt = rows
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def antibiogram(request):
+    qs = _apply_filters(LabResult.objects.all(), request.GET)
+    agg = qs.values('organism','antibiotic').annotate(
+        total=Count('id'),
+        R=Count('id', filter=Q(ast_result__iexact='R')),
+        I=Count('id', filter=Q(ast_result__iexact='I')),
+        S=Count('id', filter=Q(ast_result__iexact='S')),
+    ).order_by('-total')
+    rows = []
+    for a in agg:
+        total = a['total'] or 0
+        pctR = (a['R'] or 0)/total if total else 0.0
+        rows.append({'organism':a['organism'],'antibiotic':a['antibiotic'],'R':a['R'],'I':a['I'],'S':a['S'],'total':total,'pctR':pctR})
+    if not rows:
+        rows = [{'organism':'E. coli','antibiotic':'Ciprofloxacin','R':18,'I':4,'S':38,'total':60,'pctR':0.3}]
+    rows.setdefault("hosts", ["HUMAN", "ANIMAL", "ENVIRONMENT"])
+# Populate environment_types and animal_species from DB if possible; otherwise coerce to []
+try:
+    from .models import LabResult  # ok if duplicate, Python tolerates
+    rows["environment_types"] = list(
+        LabResult.objects.exclude(environment_type__isnull=True).exclude(environment_type__exact="")
+        .values_list("environment_type", flat=True).distinct().order_by("environment_type")
+    )
+except Exception:
+    rows["environment_types"] = rows.get("environment_types") or []
+try:
+    rows["animal_species"] = list(
+        LabResult.objects.exclude(animal_species__isnull=True).exclude(animal_species__exact="")
+        .values_list("animal_species", flat=True).distinct().order_by("animal_species")
+    )
+except Exception:
+    rows["animal_species"] = rows.get("animal_species") or []
+__opt = rows
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def sex_age(request):
+    qs = _apply_filters(LabResult.objects.all(), request.GET)
+    # by sex
+    male = qs.filter(sex__iexact='M')
+    female = qs.filter(sex__iexact='F')
+    other = qs.exclude(sex__iregex=r'^(M|F)$')
+    def block(q):
+        total = q.count()
+        R = q.filter(ast_result__iexact='R').count()
+        I = q.filter(ast_result__iexact='I').count()
+        S = q.filter(ast_result__iexact='S').count()
+        return {'total': total, 'R':R, 'I':I, 'S':S, 'pctR': (R/total) if total else 0.0}
+    by_sex = {'male':block(male), 'female':block(female), 'other':block(other)}
+
+    # simple age bands
+    bands = [(0,4),(5,14),(15,24),(25,44),(45,64),(65,200)]
+    by_age=[]
+    for lo,hi in bands:
+        q = qs.filter(age__gte=lo, age__lte=hi)
+        t = q.count(); r = q.filter(ast_result__iexact='R').count()
+        by_age.append({'band': f'{lo}-{hi}', 'total': t, 'R': r, 'pctR': (r/t) if t else 0.0})
+
+    __opt = {'by_sex':by_sex,'by_age':by_age}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+# ---------- GEO ----------
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def geo_facilities(request):
+    qs = _apply_filters(LabResult.objects.all(), request.GET)
+    facs = list(qs.values_list('facility', flat=True).distinct())
+    # dummy coords + %R demo if no real geo table
+    out=[]
+    for f in facs:
+        fq = qs.filter(facility=f)
+        t = fq.count(); r = fq.filter(ast_result__iexact='R').count()
+        pctR = (r/t) if t else None
+        out.append({'facility':f,'lat':-17.83,'lng':31.05,'tests':t,'pctR':pctR})
+    out.setdefault("hosts", ["HUMAN", "ANIMAL", "ENVIRONMENT"])
+# Populate environment_types and animal_species from DB if possible; otherwise coerce to []
+try:
+    from .models import LabResult  # ok if duplicate, Python tolerates
+    out["environment_types"] = list(
+        LabResult.objects.exclude(environment_type__isnull=True).exclude(environment_type__exact="")
+        .values_list("environment_type", flat=True).distinct().order_by("environment_type")
+    )
+except Exception:
+    out["environment_types"] = out.get("environment_types") or []
+try:
+    out["animal_species"] = list(
+        LabResult.objects.exclude(animal_species__isnull=True).exclude(animal_species__exact="")
+        .values_list("animal_species", flat=True).distinct().order_by("animal_species")
+    )
+except Exception:
+    out["animal_species"] = out.get("animal_species") or []
+__opt = out
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+# ---------- ENTRY ----------
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_entry(request):
+    data = request.data if isinstance(request.data, dict) else {}
+    if 'file' in request.FILES:  # CSV bulk
+        f = request.FILES['file']
+        reader = csv.DictReader(TextIOWrapper(f.file, encoding='utf-8'))
+        ok=0; bad=0
+        for row in reader:
+            try:
+                LabResult.objects.create(
+                    patient_id    = (row.get('patient_id') or '').strip(),
+                    sex           = (row.get('sex') or '').strip()[:1].upper(),
+                    age           = int((row.get('age') or '0').strip() or 0),
+                    specimen_type = (row.get('specimen_type') or '').strip(),
+                    organism      = (row.get('organism') or '').strip(),
+                    antibiotic    = (row.get('antibiotic') or '').strip(),
+                    ast_result    = _sanitize_ast(row.get('ast_result')),
+                    test_date     = _safe_date(row.get('test_date')) or datetime.today().date(),
+                    host_type     = (row.get('host_type') or '').strip().upper() or 'HUMAN',
+                    facility      = (row.get('facility') or '').strip(),
+                    patient_type  = (row.get('patient_type') or 'UNKNOWN').strip().upper(),
+                )
+                ok+=1
+            except Exception:
+                bad+=1
+        __opt = {'ok':ok,'bad':bad}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+else:  # single form entry
+        LabResult.objects.create(
+            patient_id    = (data.get('patient_id') or '').strip(),
+            sex           = (data.get('sex') or '').strip()[:1].upper(),
+            age           = int((str(data.get('age') or '0')).strip() or 0),
+            specimen_type = (data.get('specimen_type') or '').strip(),
+            organism      = (data.get('organism') or '').strip(),
+            antibiotic    = (data.get('antibiotic') or '').strip(),
+            ast_result    = _sanitize_ast(data.get('ast_result')),
+            test_date     = _safe_date(data.get('test_date')) or datetime.today().date(),
+            host_type     = (data.get('host_type') or '').strip().upper() or 'HUMAN',
+            facility      = (data.get('facility') or '').strip(),
+            patient_type  = (data.get('patient_type') or 'UNKNOWN').strip().upper(),
+        )
+        __opt = {'ok':1}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+# ---------- Sex & Age summary (clean buckets) ----------
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def sex_age(request):
+    # Filters
+    facility  = request.GET.get('facility')
+    organism  = request.GET.get('organism')
+    antibiotic= request.GET.get('antibiotic')
+    host      = request.GET.get('host')
+    patient   = request.GET.get('patient_type')
+
+    qs = LabResult.objects.all()
+
+    def _is_all(x): return (x is None) or (str(x).strip().lower() == 'all')
+
+    if not _is_all(facility):
+        qs = qs.filter(facility__iexact=facility)
+    if not _is_all(organism):
+        qs = qs.filter(organism__iexact=organism)
+    if not _is_all(antibiotic):
+        qs = qs.filter(antibiotic__iexact=antibiotic)
+    if not _is_all(host):
+        qs = qs.filter(host_type__iexact=host)
+    if not _is_all(patient):
+        qs = qs.filter(patient_type__iexact=patient)
+
+    # helpers
+    def norm_sex(s):
+        s = (s or '').strip().lower()
+        if s in ('m','male'): return 'Male'
+        if s in ('f','female'): return 'Female'
+        return 'Unknown'
+
+    # Build age bins
+    bins = [(0,9),(10,19),(20,29),(30,39),(40,49),(50,59),(60,69),(70,79)]
+    def age_bin(a):
+        if a is None: return 'Unknown'
+        try:
+            ai = int(a)
+        except Exception:
+            return 'Unknown'
+        if ai < 0: return 'Unknown'
+        for lo,hi in bins:
+            if lo <= ai <= hi:
+                return f'{lo}–{hi}'
+        return '80+'
+
+    # compute tallies
+    from collections import defaultdict
+    sex_tot   = defaultdict(int)
+    sex_r     = defaultdict(int)
+    age_tot   = defaultdict(int)
+    age_r     = defaultdict(int)
+
+    total_tests = 0
+    total_r     = 0
+
+    for r in qs.only('sex','age','ast_result'):
+        total_tests += 1
+        isR = (str(r.ast_result).strip().upper() == 'R')
+        if isR: total_r += 1
+
+        sx = norm_sex(getattr(r, 'sex', None))
+        sex_tot[sx] += 1
+        if isR: sex_r[sx] += 1
+
+        ab = age_bin(getattr(r, 'age', None))
+        age_tot[ab] += 1
+        if isR: age_r[ab] += 1
+
+    def pct(r, t):
+        return round((r*100.0/t), 1) if t else 0.0
+
+    by_sex = [
+        {'label':'Male',   'tests': sex_tot['Male'],   'r': sex_r['Male'],   'pctR': pct(sex_r['Male'],   sex_tot['Male'])},
+        {'label':'Female', 'tests': sex_tot['Female'], 'r': sex_r['Female'], 'pctR': pct(sex_r['Female'], sex_tot['Female'])},
+        {'label':'Unknown','tests': sex_tot['Unknown'],'r': sex_r['Unknown'],'pctR': pct(sex_r['Unknown'],sex_tot['Unknown'])},
+    ]
+    # purge empties to keep chart clean (but keep at least one if all are zero)
+    nonzero_sex = [x for x in by_sex if x['tests'] > 0]
+    if nonzero_sex:
+        by_sex = nonzero_sex
+
+    # order age bins nicely
+    desired_order = [f'{lo}–{hi}' for lo,hi in bins] + ['80+','Unknown']
+    by_age_dict = {k:{'bin':k,'tests': age_tot[k], 'r': age_r[k], 'pctR': pct(age_r[k], age_tot[k])} for k in age_tot.keys()}
+    # include empty bins to avoid missing bars
+    for k in desired_order:
+        by_age_dict.setdefault(k, {'bin':k,'tests':0,'r':0,'pctR':0.0})
+    by_age = [by_age_dict[k] for k in desired_order]
+
+    __opt = {
+        'summary': {'total': total_tests, 'r': total_r, 'pctR': pct(total_r, total_tests
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+},
+        'by_sex': by_sex,
+        'by_age': by_age,
+    })
+
+from rest_framework.parsers import JSONParser
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+
+def _int_or_none(x):
+    try:
+        return int(x)
+    except Exception:
+        return None
+
+def _date_or_none(s):
+    s = (s or "").strip()
+    if not s:
+        return None
+    from datetime import datetime
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            pass
+    return None
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def create_entry(request):
+    """
+    Body JSON fields (case-insensitive keys accepted by frontend):
+      patient_id, sex, age, specimen_type, organism, antibiotic,
+      ast_result, test_date, facility, host_type, patient_type
+    """
+    data = request.data or {}
+
+    required = ["patient_id","sex","specimen_type","organism","antibiotic","ast_result","test_date","facility","host_type"]
+    missing = [k for k in required if not (str(data.get(k,'')).strip())]
+    if missing:
+        __opt = {"error": f"Missing required: {', '.join(missing
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)
+}"}, status=400)
+
+    obj = LabResult(
+        patient_id   =(data.get("patient_id") or "").strip(),
+        sex          =(data.get("sex") or "UNKNOWN").strip(),
+        age          = _int_or_none(data.get("age")),
+        specimen_type=(data.get("specimen_type") or "").strip(),
+        organism     =(data.get("organism") or "").strip(),
+        antibiotic   =(data.get("antibiotic") or "").strip(),
+        ast_result   =(data.get("ast_result") or "").strip().upper(),
+        test_date    = _date_or_none(data.get("test_date")),
+        facility     =(data.get("facility") or "").strip(),
+        host_type    =(data.get("host_type") or "").strip().upper() or "HUMAN",
+        patient_type =(data.get("patient_type") or "UNKNOWN").strip().upper(),
+    )
+    obj.save()
+    __opt = {"ok": True, "id": obj.id}
+if __opt.get('environment_types') is None: __opt['environment_types'] = []
+if __opt.get('animal_species') is None: __opt['animal_species'] = []
+if 'hosts' not in __opt or not __opt['hosts']:
+    __opt['hosts'] = ['HUMAN','ANIMAL','ENVIRONMENT']
+return Response(__opt)

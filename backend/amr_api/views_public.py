@@ -7,23 +7,53 @@ from rest_framework.response import Response
 
 from .models import LabResult
 
-# ---------- helpers ----------
 def apply_common_filters(qs, request):
-    p = request.query_params
+    """
+    Apply filters from query params to the LabResult queryset, without touching UI.
+    Supports: facility, organism, antibiotic, patient_type, sex,
+              host_type/host, environment_type (host=ENVIRONMENT),
+              animal_species (host=ANIMAL), and date range start/end (YYYY-MM-DD).
+    """
+    p = getattr(request, "query_params", getattr(request, "GET", {}))
+
     def val(k):
         v = p.get(k)
-        return v if (v and v != "All") else None
-    if val("host_type"):    qs = qs.filter(host_type=val("host_type"))
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            if not v or v == "All":
+                return None
+        return v
+
+    host = (val("host_type") or val("host"))
+
+    if host:                qs = qs.filter(host_type=host)
     if val("organism"):     qs = qs.filter(organism=val("organism"))
     if val("antibiotic"):   qs = qs.filter(antibiotic=val("antibiotic"))
     if val("facility"):     qs = qs.filter(facility=val("facility"))
     if val("patient_type"): qs = qs.filter(patient_type=val("patient_type"))
-    # ✅ NEW: apply sex filter (handles M/F/Unknown and Male/Female synonyms)
+
+    # Sex (accept M/F/Unknown and Male/Female)
     if val("sex"):
-        s = val("sex")
-        canon = "M" if s in ("M","Male","male") else "F" if s in ("F","Female","female") else "Unknown"
+        s = str(val("sex"))
+        low = s.lower()
+        canon = "M" if low.startswith("m") else "F" if low.startswith("f") else "Unknown"
         qs = qs.filter(sex__in=[s, canon])
+
+    # One Health specifics
+    if host == "ENVIRONMENT" and val("environment_type"):
+        qs = qs.filter(environment_type=val("environment_type"))
+    if host == "ANIMAL" and val("animal_species"):
+        qs = qs.filter(animal_species=val("animal_species"))
+
+    # Optional date range
+    if val("start"): qs = qs.filter(test_date__gte=val("start"))
+    if val("end"):   qs = qs.filter(test_date__lte=val("end"))
+
     return qs
+
+# ---------- helpers ----------
 
 BINS = [(0,10),(10,20),(20,30),(30,40),(40,50),(50,60),(60,70),(70,80),(80,200)]
 def age_band(age):
@@ -43,26 +73,51 @@ def pct(n, d):
     return round((100.0 * n / d), 1) if d else 0.0
 
 # ---------- options ----------
+
 class OptionsView(APIView):
     permission_classes = [AllowAny]
-    authentication_classes = []
-    def get(self, request):
-        qs = LabResult.objects.all()
-        organisms  = list(qs.exclude(organism="").values_list("organism", flat=True).distinct())
-        antibiotics= list(qs.exclude(antibiotic="").values_list("antibiotic", flat=True).distinct())
-        facilities = list(qs.exclude(facility="").values_list("facility", flat=True).distinct())
-        hosts      = list(qs.exclude(host_type="").values_list("host_type", flat=True).distinct()) or ["HUMAN","ANIMAL","ENVIRONMENT"]
-        patient_types = list(qs.exclude(patient_type="").values_list("patient_type", flat=True).distinct()) or ["INPATIENT","OUTPATIENT","UNKNOWN"]
-        fac_objs = [{"name": f, **FACILITY_COORDS.get(f, {})} for f in facilities]
+
+    def get(self, request, *args, **kwargs):
+        hosts = ["HUMAN", "ANIMAL", "ENVIRONMENT"]
+
+        # Pull distincts directly (simple & explicit)
+        environment_types = list(
+            LabResult.objects
+            .exclude(environment_type__isnull=True).exclude(environment_type__exact="")
+            .values_list("environment_type", flat=True).distinct().order_by("environment_type")
+        )
+        animal_species = list(
+            LabResult.objects
+            .exclude(animal_species__isnull=True).exclude(animal_species__exact="")
+            .values_list("animal_species", flat=True).distinct().order_by("animal_species")
+        )
+
+        # (Keep other arrays too to avoid breaking frontend)
+        facilities = list(
+            LabResult.objects
+            .exclude(facility__isnull=True).exclude(facility__exact="")
+            .values_list("facility", flat=True).distinct().order_by("facility")
+        )
+        organisms = list(
+            LabResult.objects
+            .exclude(organism__isnull=True).exclude(organism__exact="")
+            .values_list("organism", flat=True).distinct().order_by("organism")
+        )
+        antibiotics = list(
+            LabResult.objects
+            .exclude(antibiotic__isnull=True).exclude(antibiotic__exact="")
+            .values_list("antibiotic", flat=True).distinct().order_by("antibiotic")
+        )
+
         return Response({
+            "hosts": hosts,
+            "facilities": facilities,
             "organisms": organisms,
             "antibiotics": antibiotics,
-            "facilities": fac_objs,
-            "hosts": hosts,
-            "patient_types": patient_types,
+            "environment_types": environment_types or [],
+            "animal_species": animal_species or [],
         })
 
-# ---------- summary: counts ----------
 class CountsSummaryView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []

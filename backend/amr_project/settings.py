@@ -114,3 +114,8 @@ try:
     from .local_settings import *
 except Exception:
     pass
+
+# === Upload limits ===
+# ~10 MB in-memory parse; larger files will be streamed (tweak as needed)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024

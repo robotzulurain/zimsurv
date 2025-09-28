@@ -1,0 +1,121 @@
+from datetime import datetime
+from django.utils.dateparse import parse_date
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import LabResult
+import csv
+import io
+
+VALID_RESULTS = {"R", "I", "S"}
+
+def _norm_date(s: str):
+    if not s:
+        return None
+    s = s.strip()
+    # Try ISO
+    d = parse_date(s)
+    if d:
+        return d
+    # Try DD/MM/YYYY
+    try:
+        return datetime.strptime(s, "%d/%m/%Y").date()
+    except Exception:
+        return None
+
+def _clean_row(d: dict) -> dict:
+    # Normalize keys lower -> model fields
+    nd = { (k or "").strip().lower(): (v if v is not None else "") for k, v in d.items() }
+    row = {
+        "patient_id":     nd.get("patient_id","").strip(),
+        "sex":            (nd.get("sex") or "U").strip()[:1].upper(),  # M/F/U
+        "age":            int(nd.get("age")) if str(nd.get("age") or "").strip().isdigit() else 0,
+        "specimen_type":  (nd.get("specimen_type") or "").strip().upper(),
+        "organism":       (nd.get("organism") or "").strip(),
+        "antibiotic":     (nd.get("antibiotic") or "").strip(),
+        "ast_result":     (nd.get("ast_result") or "").strip().upper(),
+        "test_date":      _norm_date(nd.get("test_date") or ""),
+        "host_type":      (nd.get("host_type") or "").strip().upper(),
+        "facility":       (nd.get("facility") or "").strip(),
+        "patient_type":   (nd.get("patient_type") or "UNKNOWN").strip().upper(),
+        "animal_species": (nd.get("animal_species") or "").strip() or None,
+        "environment_type": (nd.get("environment_type") or "").strip() or None,
+    }
+    # validate ast_result
+    if row["ast_result"] not in VALID_RESULTS:
+        row["ast_result"] = None
+    # minimal required fields check
+    required = ("patient_id","specimen_type","organism","antibiotic","host_type","facility","ast_result","test_date")
+    for k in required:
+        if not row.get(k):
+            raise ValueError(f"Missing/invalid field: {k}")
+    return row
+
+class ManualEntryOpenView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data if isinstance(request.data, dict) else {}
+        created = 0
+        errors = []
+
+        # Support either a single antibiotic (flat fields) OR an array `antibiotics`
+        antibiotics = data.get("antibiotics") or [{
+            "antibiotic": data.get("antibiotic"),
+            "ast_result": data.get("ast_result"),
+        }]
+
+        for ab in antibiotics:
+            try:
+                row = dict(data)
+                row["antibiotic"] = ab.get("antibiotic")
+                row["ast_result"] = ab.get("ast_result")
+                cleaned = _clean_row(row)
+                LabResult.objects.create(**cleaned)
+                created += 1
+            except Exception as e:
+                errors.append(str(e))
+
+        status = 200 if created and not errors else (207 if created and errors else 400)
+        return Response({"status": "ok" if created else "error", "created": created, "errors": errors}, status=status)
+
+class CSVUploadOpenView(APIView):
+    """
+    POST multipart/form-data with field name 'file' (CSV).
+    Expected headers:
+      patient_id, sex, age, specimen_type, organism, antibiotic, ast_result, test_date,
+      host_type, facility, patient_type, animal_species, environment_type
+    """
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, *args, **kwargs):
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"status": "error", "detail": "No file provided (field name 'file')."}, status=400)
+
+        try:
+            # decode to text
+            content = f.read()
+            # Try utf-8 first; fallback latin-1 for safety
+            try:
+                text = content.decode("utf-8")
+            except UnicodeDecodeError:
+                text = content.decode("latin-1")
+
+            reader = csv.DictReader(io.StringIO(text))
+            created = 0
+            errors = []
+            for i, row in enumerate(reader, start=2):  # header is line 1
+                try:
+                    cleaned = _clean_row(row)
+                    LabResult.objects.create(**cleaned)
+                    created += 1
+                except Exception as e:
+                    errors.append(f"Line {i}: {e}")
+
+            status = 200 if created and not errors else (207 if created and errors else 400)
+            return Response({"status": "ok" if created else "error", "created": created, "errors": errors}, status=status)
+        except Exception as e:
+            return Response({"status":"error", "detail": f"Failed to parse CSV: {e}"}, status=400)

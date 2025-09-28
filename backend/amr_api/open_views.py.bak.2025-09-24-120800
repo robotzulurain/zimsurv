@@ -1,0 +1,160 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+
+from .models import LabResult
+
+import io, csv, json, os
+from datetime import datetime
+
+REQUIRED = [
+    "patient_id","sex","age","specimen_type","organism",
+    "antibiotic","ast_result","test_date","host_type",
+    "facility","patient_type"
+]
+OPTIONAL = ["animal_species","environment_type"]
+
+def _norm_header(h: str):
+    return (h or "").strip().lower().replace(" ", "_")
+
+def _parse_date(s: str):
+    if not s: return None
+    s = str(s).strip()
+    # Try common formats
+    for fmt in ("%Y-%m-%d","%d/%m/%Y","%m/%d/%Y","%d-%m-%Y"):
+        try: return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    # Last resort: ISO-ish partials
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        return None
+
+def _rows_from_csv_bytes(b: bytes):
+    """
+    Decode CSV bytes robustly (handles Windows/Mac newlines, BOM, quoted fields,
+    embedded commas/newlines when quoted).
+    """
+    try:
+        text = b.decode("utf-8-sig", errors="replace")
+    except Exception:
+        # fallback
+        text = b.decode("latin-1", errors="replace")
+
+    # newline='' lets csv module handle \r, \r\n, \n correctly
+    sio = io.StringIO(text, newline="")
+    reader = csv.reader(sio)
+    rows = list(reader)
+    if not rows:
+        return [], "The file seems empty."
+
+    headers = [_norm_header(h) for h in rows[0]]
+    data = []
+    for r in rows[1:]:
+        # pad / trim to header length
+        if len(r) < len(headers):
+            r = r + [""]*(len(headers)-len(r))
+        elif len(r) > len(headers):
+            r = r[:len(headers)]
+        rec = {headers[i]: r[i] for i in range(len(headers))}
+        data.append(rec)
+    return data, None
+
+def _rows_from_xlsx_bytes(b: bytes):
+    try:
+        from openpyxl import load_workbook
+    except Exception:
+        return [], "XLSX support requires openpyxl. Please: pip install openpyxl"
+
+    bio = io.BytesIO(b)
+    try:
+        wb = load_workbook(bio, data_only=True)
+    except Exception as e:
+        return [], f"Could not read Excel: {e}"
+
+    ws = wb.active
+    headers = []
+    for j, cell in enumerate(ws[1], start=1):
+        headers.append(_norm_header(cell.value if cell.value is not None else ""))
+
+    data = []
+    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        rec = {}
+        for j, val in enumerate(row[:len(headers)]):
+            rec[headers[j]] = "" if val is None else str(val)
+        data.append(rec)
+    return data, None
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CSVUploadOpenView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"status":"error","detail":"No file attached under field name 'file'."}, status=400)
+
+        name = f.name.lower()
+        b = f.read()
+
+        # Choose parser by extension, but also try CSV parser if XLSX fails, and vice versa
+        data, err = ([], "Unsupported file")
+        if name.endswith(".xlsx") or name.endswith(".xlsm") or name.endswith(".xltx"):
+            data, err = _rows_from_xlsx_bytes(b)
+            if err:
+                # try as CSV anyway
+                data2, err2 = _rows_from_csv_bytes(b)
+                if not err2: data, err = data2, None
+        else:
+            data, err = _rows_from_csv_bytes(b)
+            if err and (name.endswith(".xls") or name.endswith(".xlsx")):
+                data2, err2 = _rows_from_xlsx_bytes(b)
+                if not err2: data, err = data2, None
+
+        if err:
+            friendly = (
+                "The file could not be parsed. "
+                "Please save it as CSV (UTF-8) with quotes around text fields, "
+                "or as Excel (.xlsx), and try again."
+            )
+            return Response({"status":"error","detail":friendly,"details":err}, status=400)
+
+        created = 0
+        errors = []
+
+        for i, rec in enumerate(data, start=2):  # 2 = assuming header on row 1
+            row = {k: (rec.get(k) or "").strip() for k in set(list(rec.keys())+REQUIRED+OPTIONAL)}
+            missing = [k for k in REQUIRED if not row.get(k)]
+            if missing:
+                errors.append(f"Row {i}: missing required column(s): {', '.join(missing)}")
+                continue
+
+            d = _parse_date(row.get("test_date"))
+            if not d:
+                errors.append(f"Row {i}: invalid test_date '{row.get('test_date')}'. Use YYYY-MM-DD or dd/mm/YYYY.")
+                continue
+
+            try:
+                LabResult.objects.create(
+                    patient_id=row["patient_id"],
+                    sex=row["sex"],
+                    age=int(float(row["age"])) if row["age"] else 0,
+                    specimen_type=row["specimen_type"],
+                    organism=row["organism"],
+                    antibiotic=row["antibiotic"],
+                    ast_result=row["ast_result"].upper()[:1],  # S/I/R
+                    test_date=d,
+                    host_type=row["host_type"].upper(),
+                    facility=row["facility"],
+                    patient_type=row["patient_type"].upper(),
+                    animal_species=row.get("animal_species",""),
+                    environment_type=row.get("environment_type",""),
+                )
+                created += 1
+            except Exception as e:
+                errors.append(f"Row {i}: {e}")
+
+        return Response({"status":"ok","created":created,"errors":errors})

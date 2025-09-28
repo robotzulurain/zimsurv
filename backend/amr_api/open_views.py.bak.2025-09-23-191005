@@ -1,0 +1,122 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from .models import LabResult
+from django.utils.dateparse import parse_date
+from datetime import datetime
+import json
+
+VALID_RESULTS = {"R", "I", "S"}
+
+class ManualEntryOpenView(APIView):
+    permission_classes = [AllowAny]
+
+    def _norm_date(self, s):
+        """
+        Accept 'YYYY-MM-DD' or 'DD/MM/YYYY' and return a date object.
+        """
+        if not s:
+            return None
+        if isinstance(s, datetime):
+            return s.date()
+        if hasattr(s, "isoformat"):  # already a date
+            try:
+                return s
+            except Exception:
+                pass
+        s = str(s).strip()
+        # Try ISO first
+        d = parse_date(s)
+        if d:
+            return d
+        # Try DD/MM/YYYY
+        try:
+            return datetime.strptime(s, "%d/%m/%Y").date()
+        except Exception:
+            return None
+
+    def post(self, request, *args, **kwargs):
+        """
+        Accept either:
+          A) single antibiotic fields at top level:
+             antibiotic, ast_result
+          B) multiple antibiotics as a list under "antibiotics":
+             [{"antibiotic":"...", "ast_result":"R"}, ...]
+        Always create 1 LabResult per antibiotic item.
+        """
+        # request.data may be a QueryDict; coerce to plain dict
+        if hasattr(request, "data"):
+            raw = request.data
+            # In DRF, request.data can be a dict-like object. Turn it into a real dict.
+            try:
+                data = dict(raw)
+                # When values are lists (QueryDict), take the last one.
+                for k, v in list(data.items()):
+                    if isinstance(v, (list, tuple)) and v:
+                        data[k] = v[-1]
+            except Exception:
+                data = raw
+        else:
+            # fallback for plain Django request
+            try:
+                data = json.loads(request.body.decode("utf-8"))
+            except Exception:
+                return Response({"detail": "Invalid JSON"}, status=400)
+
+        # Normalize shared fields
+        patient_id    = (data.get("patient_id") or "").strip()
+        sex           = (data.get("sex") or "").strip()[:1].upper()
+        try:
+            age = int(data.get("age") or 0)
+        except Exception:
+            age = 0
+        specimen_type = (data.get("specimen_type") or "").strip()
+        organism      = (data.get("organism") or "").strip()
+        test_date     = self._norm_date(data.get("test_date"))
+        host_type     = (data.get("host_type") or "").strip().upper() or "HUMAN"
+        facility      = (data.get("facility") or "").strip()
+        patient_type  = (data.get("patient_type") or "UNKNOWN").strip().upper()
+
+        environment_type = (data.get("environment_type") or "").strip()
+        animal_species   = (data.get("animal_species") or "").strip()
+
+        # Build antibiotic items
+        items = []
+        if isinstance(data.get("antibiotics"), list):
+            for it in data.get("antibiotics") or []:
+                ab = (it.get("antibiotic") or "").strip()
+                ar = (it.get("ast_result") or "").strip().upper()[:1]
+                if ab and ar in VALID_RESULTS:
+                    items.append((ab, ar))
+        else:
+            # Single antibiotic form
+            ab = (data.get("antibiotic") or "").strip()
+            ar = (data.get("ast_result") or "").strip().upper()[:1]
+            if ab and ar in VALID_RESULTS:
+                items.append((ab, ar))
+
+        if not items:
+            return Response({"detail": "No valid antibiotic/ast_result found"}, status=400)
+        if not patient_id or not organism or not test_date:
+            return Response({"detail": "Missing required fields (patient_id, organism, test_date)."}, status=400)
+
+        created = 0
+        for abx, ast in items:
+            LabResult.objects.create(
+                patient_id    = patient_id,
+                sex           = sex or "U",
+                age           = age,
+                specimen_type = specimen_type,
+                organism      = organism,
+                antibiotic    = abx,
+                ast_result    = ast,
+                test_date     = test_date,
+                host_type     = host_type or "HUMAN",
+                facility      = facility,
+                patient_type  = patient_type or "UNKNOWN",
+                environment_type = environment_type,
+                animal_species   = animal_species,
+            )
+            created += 1
+
+        return Response({"status": "ok", "created": created})

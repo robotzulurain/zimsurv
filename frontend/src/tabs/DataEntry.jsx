@@ -1,3 +1,5 @@
+import WHONETUploader from '../components/WHONETUploader';
+import BulkUpload from "../components/BulkUpload";
 import React, { useEffect, useMemo, useState } from "react";
 import { options, createEntry, uploadCSV } from "../api";
 
@@ -90,6 +92,7 @@ export default function DataEntry(){
                   background: tab==="bulk" ? "#0ea5e9" : "#fff",
                   color: tab==="bulk" ? "#fff" : "#111"}}>
           Bulk Upload (CSV)
+      <BulkUpload />
         </button>
       </div>
 
@@ -135,7 +138,6 @@ export default function DataEntry(){
       {tab === "bulk" && (
         <div>
           <Section title="Upload CSV">
-            <input type="file" accept=".csv" onChange={e=> setFile(e.target.files?.[0] || null)} />
             <button onClick={doUpload}
               style={{marginLeft:8, padding:'8px 14px', borderRadius:10, border:'1px solid #0ea5e9', background:'#0ea5e9', color:'#fff'}}>
               Upload

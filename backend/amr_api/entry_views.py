@@ -43,6 +43,8 @@ def create_entry(request):
         for i, raw in enumerate(reader, start=1):
             row = _clean(raw)
             try:
+                row.setdefault("environment_type", row.get("environment_type")) or None
+                row.setdefault("animal_species", row.get("animal_species")) or None
                 LabResult.objects.create(**row)
                 created += 1
             except Exception as e:
@@ -53,6 +55,8 @@ def create_entry(request):
     if data['age'] < 0 or data['age'] > 120:
         return Response({'ok': False, 'error': 'Age must be 0–120'}, status=400)
     try:
+        data.setdefault("environment_type", data.get("environment_type")) or None
+        data.setdefault("animal_species", data.get("animal_species")) or None
         LabResult.objects.create(**data)
         return Response({'ok': True})
     except Exception as e:

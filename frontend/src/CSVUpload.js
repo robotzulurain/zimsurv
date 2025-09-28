@@ -47,7 +47,6 @@ export default function CSVUpload({ token }) {
   return (
     <div>
       <h2>Upload Lab Results (CSV)</h2>
-      <input type="file" accept=".csv" onChange={handleFileChange} />
       <button onClick={handleUpload}>Upload</button>
       <p>{uploadStatus}</p>
     </div>

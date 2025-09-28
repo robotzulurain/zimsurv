@@ -55,7 +55,6 @@ export default function CSVUpload({ token }) {
       <div style={{ marginBottom: 8 }}>
         <a href="/amr_template.csv" download>Need a template? Download CSV template</a>
       </div>
-      <input type="file" accept=".csv" onChange={handleFileChange} />
       <button onClick={handleUpload}>Upload</button>
       {uploadStatus && <pre style={{ whiteSpace: 'pre-wrap' }}>{uploadStatus}</pre>}
     </div>

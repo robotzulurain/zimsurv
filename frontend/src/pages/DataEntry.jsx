@@ -1,3 +1,4 @@
+import BulkUpload from "../components/BulkUpload";
 import React,{useEffect,useState} from "react";
 import { uploadFile, fetchFacilities } from "../api";
 
@@ -23,6 +24,7 @@ export default function DataEntry(){
     <div className="grid autofit">
       <div className="card">
         <h4 style={{marginTop:0}}>Upload CSV/XLSX</h4>
+      <BulkUpload />
         <p>Required columns: <code>patient_id,sex,age,specimen_type,organism,antibiotic,ast_result,test_date,facility,host_type</code> (date: <b>YYYY-MM-DD</b>).</p>
         <input type="file"
           accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"

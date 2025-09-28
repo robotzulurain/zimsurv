@@ -1,0 +1,187 @@
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.db import transaction
+from datetime import date, datetime
+import csv, io, os
+
+from .models import LabResult  # adjust if your model name differs
+
+def _norm_key(k: str) -> str:
+    return str(k or "").strip().lower().replace(" ", "_")
+
+def _to_int(v, default=0):
+    try:
+        return int(float(v))
+    except Exception:
+        return default
+
+def _to_date_str(v):
+    if v is None or v == "":
+        return None
+    # pandas Timestamp / datetime / date
+    if hasattr(v, "date") or hasattr(v, "year"):
+        try:
+            d = v.date() if hasattr(v, "date") else v
+            return d.isoformat()
+        except Exception:
+            pass
+    s = str(v).strip()
+    # try ISO first
+    try:
+        return datetime.fromisoformat(s).date().isoformat()
+    except Exception:
+        pass
+    # try common dd/mm/yyyy, mm/dd/yyyy
+    for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except Exception:
+            continue
+    return s  # last resort: store raw string (Django DateField may coerce/complain)
+
+def _iter_rows_from_upload(dj_file):
+    """
+    Yield dict rows with normalized keys from an uploaded file.
+    Supports CSV, XLSX, XLS.
+    """
+    name = getattr(dj_file, "name", "") or ""
+    ext = os.path.splitext(name)[1].lower()
+
+    # CSV path
+    if ext == ".csv":
+        text = io.TextIOWrapper(dj_file.file, encoding="utf-8", newline="")
+        reader = csv.DictReader(text)
+        for row in reader:
+            yield { _norm_key(k): v for k, v in (row or {}).items() }
+
+    # Excel path
+    elif ext in (".xlsx", ".xls"):
+        try:
+            import pandas as pd
+        except Exception as e:
+            raise RuntimeError(f"Excel support requires pandas/openpyxl: {e}")
+
+        # NOTE: pandas can read file-like directly
+        try:
+            if ext == ".xlsx":
+                df = pd.read_excel(dj_file, dtype=object, engine="openpyxl")
+            else:  # .xls
+                # requires xlrd installed; we've added it in pip step
+                df = pd.read_excel(dj_file, dtype=object)
+        except Exception as e:
+            raise RuntimeError(f"Failed to read Excel: {e}")
+
+        df = df.fillna("")
+        for rec in df.to_dict(orient="records"):
+            yield { _norm_key(k): v for k, v in (rec or {}).items() }
+
+    else:
+        # fallback: try CSV if content-type lied
+        text = io.TextIOWrapper(dj_file.file, encoding="utf-8", newline="")
+        sniffer = csv.Sniffer()
+        sample = text.read(2048)
+        text.seek(0)
+        dialect = sniffer.sniff(sample) if sample else None
+        reader = csv.DictReader(text, dialect=dialect)
+        for row in reader:
+            yield { _norm_key(k): v for k, v in (row or {}).items() }
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CSVUploadOpenView(APIView):
+    """
+    Accepts CSV or Excel (.xlsx/.xls) at the SAME endpoint.
+    Strictly APPENDS new rows — does not delete or update existing data.
+    Skips invalid rows; returns counts.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "No file uploaded (field name: file)."}, status=400)
+
+        created = 0
+        skipped = 0
+        errors = []
+
+        # We do NOT wrap the whole file in a single transaction to avoid aborting all rows.
+        for idx, row in enumerate(_iter_rows_from_upload(f), start=1):
+            try:
+                # Normalize required fields from flexible headers
+                patient_id   = row.get("patient_id") or row.get("patientid") or ""
+                sex_raw      = (row.get("sex") or "").strip()
+                sex          = "M" if sex_raw in ("M","Male","male") else "F" if sex_raw in ("F","Female","female") else "Unknown"
+                age          = _to_int(row.get("age"), 0)
+                specimen     = row.get("specimen_type") or row.get("specimen") or ""
+                organism     = row.get("organism") or row.get("microbe") or ""
+                antibiotic   = row.get("antibiotic") or row.get("abx") or ""
+                ast_result   = (row.get("ast_result") or row.get("result") or "").strip().upper()
+                test_date    = _to_date_str(row.get("test_date") or row.get("date"))
+                host_type    = (row.get("host_type") or row.get("host") or "").strip().upper() or ""
+                facility     = row.get("facility") or row.get("site") or ""
+                patient_type = (row.get("patient_type") or row.get("ptype") or "").strip().upper() or ""
+
+                # Light validation (skip bad rows; don't fail the whole upload)
+                if ast_result not in ("R","I","S"):
+                    skipped += 1; errors.append(f"Row {idx}: invalid ast_result '{ast_result}'"); continue
+                if not organism or not antibiotic:
+                    skipped += 1; errors.append(f"Row {idx}: organism/antibiotic required"); continue
+                if age < 0 or age > 120:
+                    skipped += 1; errors.append(f"Row {idx}: age out of range"); continue
+
+                LabResult.objects.create(
+patient_id=patient_id,
+                    sex=sex,
+                    age=age,
+                    specimen_type=specimen,
+                    organism=organism,
+                    antibiotic=antibiotic,
+                    ast_result=ast_result,
+                    test_date=test_date,
+                    host_type=host_type,
+                    facility=facility,
+                    patient_type=patient_type,
+            environment_type = data.get("environment_type",
+            environment_type = data.get("environment_type"),
+            animal_species   = data.get("animal_species"),
+        ),
+            animal_species   = data.get("animal_species"),
+        )
+                created += 1
+            except Exception as e:
+                skipped += 1
+                errors.append(f"Row {idx}: {e}")
+
+        return Response({"status": "ok", "created": created, "skipped": skipped, "errors": errors[:20]})  # cap errors preview
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ManualEntryOpenView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data or {}
+        try:
+            LabResult.objects.create(
+patient_id=data.get("patient_id",
+            environment_type = data.get("environment_type"),
+            animal_species   = data.get("animal_species"),
+        ) or "",
+                sex=data.get("sex") or "",
+                age=_to_int(data.get("age"), 0),
+                specimen_type=data.get("specimen_type") or "",
+                organism=data.get("organism") or "",
+                antibiotic=data.get("antibiotic") or "",
+                ast_result=(data.get("ast_result") or "").strip().upper(),
+                test_date=_to_date_str(data.get("test_date")),
+                host_type=(data.get("host_type") or "").strip().upper(),
+                facility=data.get("facility") or "",
+                patient_type=(data.get("patient_type") or "").strip().upper(),
+            )
+            return Response({"status":"ok"})
+        except Exception as e:
+            return Response({"detail": str(e)}, status=400)
